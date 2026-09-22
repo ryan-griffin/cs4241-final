@@ -1,0 +1,15 @@
+min_version: 2.1.14
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: biome
+      glob:
+        - "*.{js,ts,jsx,tsx,mjs,cjs,json,jsonc,css}"
+      run: pnpm exec biome check --write {staged_files}
+      stage_fixed: true
+
+    - name: typecheck
+      glob:
+        - "*.{js,ts,jsx,tsx,mjs,cjs}"
+      run: pnpm typecheck
