@@ -11,3 +11,76 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+enum GroupStatus {
+  DRAFT
+  VOTING
+  COMPLETE
+}
+
+model User {
+  username     String @id
+  passwordHash String
+
+  ownedGroups Group[]           @relation("OwnedGroups")
+  memberships GroupMembership[]
+}
+
+model Group {
+  id        String      @id @default(cuid())
+  name      String
+  status    GroupStatus @default(DRAFT)
+  createdAt DateTime    @default(now())
+  ownerId   String
+
+  owner       User              @relation("OwnedGroups", fields: [ownerId], references: [username], onDelete: Cascade, onUpdate: Cascade)
+  members     GroupMembership[]
+  restaurants GroupRestaurant[]
+
+  @@unique([ownerId, name])
+}
+
+model GroupMembership {
+  groupId String
+  userId  String
+
+  group   Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user    User     @relation(fields: [userId], references: [username], onDelete: Cascade, onUpdate: Cascade)
+  ratings Rating[]
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model Restaurant {
+  id   String @id @default(cuid())
+  name String
+
+  groups GroupRestaurant[]
+}
+
+model GroupRestaurant {
+  groupId      String
+  restaurantId String
+
+  group      Group      @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  restaurant Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Restrict)
+  ratings    Rating[]
+
+  @@id([groupId, restaurantId])
+  @@index([restaurantId])
+}
+
+model Rating {
+  groupId      String
+  restaurantId String
+  userId       String
+  score        Int
+
+  groupRestaurant GroupRestaurant @relation(fields: [groupId, restaurantId], references: [groupId, restaurantId], onDelete: Cascade)
+  membership      GroupMembership @relation(fields: [groupId, userId], references: [groupId, userId], onDelete: Cascade, onUpdate: Cascade)
+
+  @@id([groupId, restaurantId, userId])
+  @@index([groupId, userId])
+  @@index([userId])
+}
