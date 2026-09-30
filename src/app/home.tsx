@@ -90,14 +90,30 @@ export default function HomePage() {
                     </Button>
                 )}
             </div>
-            <ul className="mt-2 space-y-2 ml-2">
+            <ul className="flex flex-row flex-wrap gap-2 mt-2 space-y-2 ml-2">
                 {groups.map((group) => (
                     <li key={group.id}>
                         <Button
                             variant="outline"
+                            className="flex flex-col items-start justify-between w-full h-auto min-h-[140px] rounded-xl bg-white p-5 text-black shadow-sm text-left align-top"
                             onClick={() => setOpenGroupId(group.id)}
                         >
-                            {group.name}
+                            <div className="w-full">
+                                <h3 className="font-semibold text-lg">
+                                    {group.name}
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                    {group.members?.length || 0} members
+                                </p>
+                            </div>
+
+                            <div>
+                                <p className="text-sm text-gray-600">
+                                    {group.members && group.members.length > 0
+                                        ? group.members.join(", ")
+                                        : "No members yet."}
+                                </p>
+                            </div>
                         </Button>
                     </li>
                 ))}
