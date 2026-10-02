@@ -2,6 +2,7 @@
 
 import { type FormEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
 import { logout } from "@/lib/auth-actions";
 
 type Group = {
@@ -19,19 +20,20 @@ export default function Home() {
     const [groupName, setGroupName] = useState("");
     const [openGroupId, setOpenGroupId] = useState<string | null>(null);
     const [addGroupMembersOpen, setAddGroupMembersOpen] = useState(false);
-    function createGroup(event: FormEvent<HTMLFormElement>) {
+    async function createGroup(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const name = groupName.trim();
         if (!name) return;
+        const currentUser = await getCurrentUser();
 
         setGroups((currentGroups) => [
             {
                 id: crypto.randomUUID(),
                 name,
-                status: "draft",
+                status: "DRAFT",
                 createdAt: new Date(),
-                ownerId: "user",
-                members: ["user"],
+                ownerId: currentUser?.username || "user",
+                members: [currentUser?.username || "user"],
             },
             ...currentGroups,
         ]);
