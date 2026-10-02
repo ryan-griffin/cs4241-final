@@ -53,8 +53,21 @@ model GroupMembership {
 }
 
 model Restaurant {
-  id   String @id @default(cuid())
-  name String
+  id           String @id @default(cuid())
+  yelpID       String @unique
+  name         String
+  imageUrl     String?
+  address      String?
+  city         String?
+  state        String?
+  ZipCode      String?
+  latitude     Float? 
+  longitude    Float?
+  price        String?
+  YelpRating   Float
+  yelpURL      String?  
+  groupId      String
+  restaurantId String
 
   groups GroupRestaurant[]
 }
