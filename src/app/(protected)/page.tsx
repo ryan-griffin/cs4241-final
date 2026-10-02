@@ -1,70 +1,100 @@
 "use client";
 
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { getCurrentUser } from "@/lib/auth";
-import { logout } from "@/lib/auth-actions";
-
-type Group = {
-    id: string;
-    name: string;
-    status: string;
-    createdAt: Date;
-    ownerId: string;
-    members: string[];
-};
+import {
+    addMember as addMemberBE,
+    createGroup as createGroupBE,
+    type Group,
+    getCurrentUsername,
+    getGroups,
+    logout,
+} from "@/lib/auth-actions";
 
 export default function Home() {
     const [groups, setGroups] = useState<Group[]>([]);
     const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [groupName, setGroupName] = useState("");
+    const [memberUsername, setMemberUsername] = useState("");
     const [openGroupId, setOpenGroupId] = useState<string | null>(null);
     const [addGroupMembersOpen, setAddGroupMembersOpen] = useState(false);
+    const [error, setError] = useState("");
+    const [user, setUser] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isActive = true;
+
+        getCurrentUsername().then((username) => {
+            setUser(username);
+        });
+
+        getGroups()
+            .then((loadedGroups) => {
+                if (isActive) {
+                    setGroups(loadedGroups);
+                }
+            })
+            .catch(() => {
+                if (isActive) {
+                    setError("unable to load  groups");
+                }
+            });
+
+        return () => {
+            isActive = false;
+        };
+    }, []);
+
     async function createGroup(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         const name = groupName.trim();
         if (!name) return;
-        const currentUser = await getCurrentUser();
 
-        setGroups((currentGroups) => [
-            {
-                id: crypto.randomUUID(),
-                name,
-                status: "DRAFT",
-                createdAt: new Date(),
-                ownerId: currentUser?.username || "user",
-                members: [currentUser?.username || "user"],
-            },
-            ...currentGroups,
-        ]);
-        setGroupName("");
-        setIsCreateOpen(false);
+        setError("");
+        try {
+            const result = await createGroupBE(name);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setGroupName("");
+            setIsCreateOpen(false);
+        } catch {
+            setError("unable to create the group");
+        }
     }
 
-    function addMemberToGroup(event: FormEvent<HTMLFormElement>) {
+    async function addMemberToGroup(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        const name = groupName.trim();
-        if (!name || !openGroupId) return;
+        const username = memberUsername.trim();
+        if (!username || !openGroupId) return;
 
-        setGroups((currentGroups) =>
-            currentGroups.map((group) =>
-                group.id === openGroupId
-                    ? {
-                          ...group,
-                          members: [...group.members, name],
-                      }
-                    : group,
-            ),
-        );
-        setGroupName("");
-        setAddGroupMembersOpen(false);
+        setError("");
+        try {
+            const result = await addMemberBE(openGroupId, username);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setMemberUsername("");
+            setAddGroupMembersOpen(false);
+        } catch {
+            setError("unable to add the group member");
+        }
     }
 
     return (
         <main>
-            <div className="border-b border-gray-200 pb-4 mb-4">
+            <div className="border-b border-gray-200 pb-4 mb-4 flex justify-between items-center flex-wrap gap-2">
                 {isCreateOpen ? (
-                    <form onSubmit={createGroup}>
+                    <form
+                        onSubmit={createGroup}
+                        className="flex items-center flex-wrap gap-2"
+                    >
                         <input
                             maxLength={60}
                             required
@@ -77,10 +107,21 @@ export default function Home() {
                         <Button type="submit">Create Group</Button>
                         <Button
                             type="button"
-                            onClick={() => setIsCreateOpen(false)}
+                            onClick={() => {
+                                setIsCreateOpen(false);
+                                setError("");
+                            }}
                         >
                             Cancel
                         </Button>
+                        {error && (
+                            <p
+                                className="mb-4 ml-2 text-sm text-red-600"
+                                role="alert"
+                            >
+                                {error}
+                            </p>
+                        )}
                     </form>
                 ) : (
                     <Button
@@ -91,12 +132,18 @@ export default function Home() {
                         Create Group
                     </Button>
                 )}
+
                 <form action={logout}>
-                    <Button type="submit" variant="outline">
-                        Log out
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        className="border rounded px-2 py-1 mt-2 ml-2 mr-2 border-gray-300"
+                    >
+                        Log Out
                     </Button>
                 </form>
             </div>
+
             <ul className="flex flex-row flex-wrap gap-2 mt-2 space-y-2 ml-2">
                 {groups.map((group) => (
                     <li key={group.id}>
@@ -163,44 +210,58 @@ export default function Home() {
                                             No members
                                         </p>
                                     )}
-                                    {addGroupMembersOpen ? (
-                                        <form onSubmit={addMemberToGroup}>
-                                            <input
-                                                maxLength={60}
-                                                required
-                                                value={groupName}
-                                                onChange={(event) =>
-                                                    setGroupName(
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                className="border rounded px-2 py-1 mt-2 ml-2 mr-2 border-gray-300"
-                                            />
-                                            <Button type="submit">
+                                    {user === group.ownerId &&
+                                        (addGroupMembersOpen ? (
+                                            <form onSubmit={addMemberToGroup}>
+                                                <input
+                                                    maxLength={32}
+                                                    required
+                                                    value={memberUsername}
+                                                    onChange={(event) =>
+                                                        setMemberUsername(
+                                                            event.target.value,
+                                                        )
+                                                    }
+                                                    className="border rounded px-2 py-1 mt-2 ml-2 mr-2 border-gray-300"
+                                                />
+                                                <Button type="submit">
+                                                    Add Member
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setAddGroupMembersOpen(
+                                                            false,
+                                                        );
+                                                        setMemberUsername("");
+                                                        setError("");
+                                                    }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                {error && (
+                                                    <p
+                                                        className="mb-4 ml-2 text-sm text-red-600"
+                                                        role="alert"
+                                                    >
+                                                        {error}
+                                                    </p>
+                                                )}
+                                            </form>
+                                        ) : (
+                                            <Button
+                                                className="mt-2 ml-2 mr-2"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    setAddGroupMembersOpen(
+                                                        true,
+                                                    );
+                                                    setError("");
+                                                }}
+                                            >
                                                 Add Member
                                             </Button>
-                                            <Button
-                                                type="button"
-                                                onClick={() =>
-                                                    setAddGroupMembersOpen(
-                                                        false,
-                                                    )
-                                                }
-                                            >
-                                                Cancel
-                                            </Button>
-                                        </form>
-                                    ) : (
-                                        <Button
-                                            className="mt-2 ml-2 mr-2"
-                                            variant="outline"
-                                            onClick={() =>
-                                                setAddGroupMembersOpen(true)
-                                            }
-                                        >
-                                            Add Member
-                                        </Button>
-                                    )}
+                                        ))}
                                 </div>
                             </section>
                         </div>

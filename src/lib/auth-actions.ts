@@ -2,11 +2,127 @@
 
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
-import { createSession, deleteSession } from "@/lib/auth";
+import { createSession, deleteSession, getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export type AuthResult = { error: string } | undefined;
 
+export type Group = {
+    id: string;
+    name: string;
+    status: string;
+    createdAt: Date;
+    ownerId: string;
+    members: string[];
+};
+
+export async function getGroups(): Promise<Group[]> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        throw new Error("no user, log in");
+    }
+
+    const groups = await db.group.findMany({
+        where: { members: { some: { userId: currentUser.username } } },
+        include: { members: { select: { userId: true } } },
+        orderBy: { createdAt: "desc" },
+    });
+
+    return groups.map((group) => ({
+        id: group.id,
+        name: group.name,
+        status: group.status,
+        createdAt: group.createdAt,
+        ownerId: group.ownerId,
+        members: group.members.map((member) => member.userId),
+    }));
+}
+
+export async function createGroup(name: string): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const normalizedName = name.trim();
+    if (!normalizedName || normalizedName.length > 60) {
+        return { error: "group name must be under 60 characters" };
+    }
+
+    const existing = await db.group.findUnique({
+        where: {
+            ownerId_name: {
+                ownerId: currentUser.username,
+                name: normalizedName,
+            },
+        },
+        select: { id: true },
+    });
+    if (existing) {
+        return { error: "you already have a group with that name" };
+    }
+
+    await db.group.create({
+        data: {
+            name: normalizedName,
+            ownerId: currentUser.username,
+            members: { create: { userId: currentUser.username } },
+        },
+    });
+}
+
+export async function addMember(
+    groupId: string,
+    username: string,
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,32}$/.test(normalizedUsername)) {
+        return { error: "invalid username" };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: {
+            id: true,
+            members: {
+                where: { userId: normalizedUsername },
+                select: { userId: true },
+            },
+        },
+    });
+    if (!group) {
+        return { error: "only the group owner can add members." };
+    }
+
+    const user = await db.user.findUnique({
+        where: { username: normalizedUsername },
+        select: { username: true },
+    });
+    if (!user) {
+        return { error: "username does not exist." };
+    }
+
+    if (group.members.length > 0) {
+        return { error: "user is already a member" };
+    }
+
+    await db.groupMembership.create({
+        data: { groupId: group.id, userId: user.username },
+    });
+}
+
+export async function getCurrentUsername(): Promise<string | null> {
+    const currentUser = await getCurrentUser();
+    return currentUser?.username ?? null;
+}
 export async function signup(
     _prev: AuthResult,
     formData: FormData,
