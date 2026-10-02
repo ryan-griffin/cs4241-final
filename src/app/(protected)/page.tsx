@@ -151,7 +151,7 @@ export default function Home() {
                                         Group Members
                                     </h3>
                                     {group.members.length > 0 ? (
-                                        <ul className="text-gray-700list-disc pl-5 space-y-1">
+                                        <ul className="text-gray-700 list-disc pl-5 space-y-1">
                                             {group.members.map((member) => (
                                                 <li key={member}>{member}</li>
                                             ))}
