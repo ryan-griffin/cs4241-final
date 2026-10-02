@@ -13,7 +13,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
     return (
         <html lang="en" className={cn("font-sans antialiased", inter.variable)}>
-            <body>{children}</body>
+            <body className={cn("bg-background text-foreground")}>
+                {children}
+            </body>
         </html>
     );
 }
