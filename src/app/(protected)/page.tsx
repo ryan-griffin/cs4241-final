@@ -38,7 +38,7 @@ export default function Home() {
             })
             .catch(() => {
                 if (isActive) {
-                    setError("unable to load  groups");
+                    setError("unable to load groups");
                 }
             });
 
@@ -193,15 +193,13 @@ export default function Home() {
                                     {group.name}
                                 </h3>
                                 <p className="text-xs text-muted-foreground">
-                                    {group.members?.length || 0} members
+                                    {group.members?.length} members
                                 </p>
                             </div>
 
                             <div>
                                 <p className="text-sm text-gray-600">
-                                    {group.members && group.members.length > 0
-                                        ? group.members.join(", ")
-                                        : "No members yet."}
+                                    {group.members?.join(", ")}
                                 </p>
                             </div>
                         </Button>
