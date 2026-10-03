@@ -119,6 +119,77 @@ export async function addMember(
     });
 }
 
+export async function removeMember(
+    groupId: string,
+    username: string,
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!/^[a-z0-9_]{3,32}$/.test(normalizedUsername)) {
+        return { error: "invalid username" };
+    }
+
+    const group = await db.group.findFirst({
+        where: { id: groupId },
+        select: {
+            id: true,
+            ownerId: true,
+            members: {
+                where: { userId: normalizedUsername },
+                select: { userId: true },
+            },
+        },
+    });
+    if (!group) {
+        return { error: "group does not exist." };
+    }
+
+    if (group.members.length === 0) {
+        return { error: "user is not a member" };
+    }
+
+    if (normalizedUsername === group.ownerId) {
+        return { error: "group owner cannot leave" };
+    }
+
+    if (
+        currentUser.username !== group.ownerId &&
+        currentUser.username !== normalizedUsername
+    ) {
+        return { error: "only the group owner can remove other members" };
+    }
+
+    await db.groupMembership.delete({
+        where: {
+            groupId_userId: { groupId: group.id, userId: normalizedUsername },
+        },
+    });
+}
+
+export async function deleteGroup(groupId: string): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+    if (!group) {
+        return { error: "only the group owner can delete the group." };
+    }
+
+    await db.group.delete({ where: { id: group.id } });
+}
+
 export async function getCurrentUsername(): Promise<string | null> {
     const currentUser = await getCurrentUser();
     return currentUser?.username ?? null;

@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import {
     addMember as addMemberBE,
     createGroup as createGroupBE,
+    deleteGroup as deleteGroupBE,
     type Group,
     getCurrentUsername,
     getGroups,
     logout,
+    removeMember,
 } from "@/lib/auth-actions";
 
 export default function Home() {
@@ -86,10 +88,44 @@ export default function Home() {
             setError("unable to add the group member");
         }
     }
+    async function deleteMember(username: string) {
+        if (!openGroupId) return;
 
+        setError("");
+        try {
+            const result = await removeMember(openGroupId, username);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            if (username === user) {
+                setOpenGroupId(null);
+            }
+        } catch {
+            setError("unable to remove the group member");
+        }
+    }
+
+    async function deleteGroup(groupId: string) {
+        setError("");
+        try {
+            const result = await deleteGroupBE(groupId);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setOpenGroupId(null);
+        } catch {
+            setError("unable to delete the group");
+        }
+    }
     return (
         <main>
-            <div className="border-b border-gray-200 pb-4 mb-4 flex justify-between items-center flex-wrap gap-2">
+            <div className="border-b border-gray-200 mb-4 flex justify-between items-center flex-wrap gap-2">
                 {isCreateOpen ? (
                     <form
                         onSubmit={createGroup}
@@ -102,7 +138,7 @@ export default function Home() {
                             onChange={(event) =>
                                 setGroupName(event.target.value)
                             }
-                            className="border rounded px-2 py-1 mt-2 ml-2 mr-2 border-gray-300"
+                            className="border rounded px-2 py-1 ml-2 mr-2 border-gray-300"
                         />
                         <Button type="submit">Create Group</Button>
                         <Button
@@ -116,7 +152,7 @@ export default function Home() {
                         </Button>
                         {error && (
                             <p
-                                className="mb-4 ml-2 text-sm text-red-600"
+                                className="ml-2 text-sm text-red-600"
                                 role="alert"
                             >
                                 {error}
@@ -125,7 +161,7 @@ export default function Home() {
                     </form>
                 ) : (
                     <Button
-                        className="mt-2 ml-2 mr-2"
+                        className="mt-2 ml-2 mr-2 mb-2"
                         variant="outline"
                         onClick={() => setIsCreateOpen(true)}
                     >
@@ -187,13 +223,47 @@ export default function Home() {
                                     <h2 className="text-xl font-bold">
                                         {group.name}
                                     </h2>
-                                    <Button
-                                        variant="secondary"
-                                        onClick={() => setOpenGroupId(null)}
-                                    >
-                                        Close
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        {user !== group.ownerId && (
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() =>
+                                                    deleteMember(user || "")
+                                                }
+                                            >
+                                                Leave Group
+                                            </Button>
+                                        )}
+                                        {user === group.ownerId && (
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => {
+                                                    deleteGroup(group.id);
+                                                    setOpenGroupId(null);
+                                                }}
+                                            >
+                                                Delete Group
+                                            </Button>
+                                        )}
+                                        <Button
+                                            variant="secondary"
+                                            onClick={() => setOpenGroupId(null)}
+                                        >
+                                            Close
+                                        </Button>
+                                    </div>
                                 </div>
+
+                                {error && (
+                                    <p
+                                        className="mb-4 text-sm text-red-600"
+                                        role="alert"
+                                    >
+                                        {error}
+                                    </p>
+                                )}
 
                                 <div>
                                     <h3 className="text-lg font-semibold mb-2">
@@ -202,7 +272,25 @@ export default function Home() {
                                     {group.members.length > 0 ? (
                                         <ul className="text-gray-700 list-disc pl-5 space-y-1">
                                             {group.members.map((member) => (
-                                                <li key={member}>{member}</li>
+                                                <li key={member}>
+                                                    {member}
+                                                    {user === group.ownerId &&
+                                                        member !==
+                                                            group.ownerId && (
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                className="ml-2"
+                                                                onClick={() =>
+                                                                    deleteMember(
+                                                                        member,
+                                                                    )
+                                                                }
+                                                            >
+                                                                Remove
+                                                            </Button>
+                                                        )}
+                                                </li>
                                             ))}
                                         </ul>
                                     ) : (
@@ -239,14 +327,6 @@ export default function Home() {
                                                 >
                                                     Cancel
                                                 </Button>
-                                                {error && (
-                                                    <p
-                                                        className="mb-4 ml-2 text-sm text-red-600"
-                                                        role="alert"
-                                                    >
-                                                        {error}
-                                                    </p>
-                                                )}
                                             </form>
                                         ) : (
                                             <Button
