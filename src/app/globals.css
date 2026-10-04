@@ -127,3 +127,17 @@
         @apply font-sans;
     }
 }
+
+.restaurant-marker-label.leaflet-tooltip {
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 0;
+}
+
+.restaurant-marker-label.leaflet-tooltip::before {
+    display: none;
+}

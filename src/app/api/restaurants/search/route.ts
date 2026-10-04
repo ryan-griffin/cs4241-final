@@ -18,7 +18,8 @@ export async function GET(request: NextRequest) {
 
     const params = new URLSearchParams({
         term: "restaurant",
-        limit: "20",
+        limit: "50",
+        sort_by: "distance",
     });
 
     if (location) {
