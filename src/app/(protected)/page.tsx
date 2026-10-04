@@ -208,13 +208,14 @@ export default function Home() {
                         </li>
                     ))}
                 </ul>
-
-                <section className="flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                    <h2 className="mb-3 text-lg font-semibold">
-                        Nearby Restaurants
-                    </h2>
-                    <RestaurantMap />
-                </section>
+                {openGroupId === null && (
+                    <section className="flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                        <h2 className="mb-3 text-lg font-semibold">
+                            Nearby Restaurants
+                        </h2>
+                        <RestaurantMap />
+                    </section>
+                )}
             </div>
 
             {groups.map(
