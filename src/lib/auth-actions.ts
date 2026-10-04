@@ -256,3 +256,26 @@ export async function logout(): Promise<void> {
     await deleteSession();
     redirect("/login");
 }
+
+export async function groupToVoting(groupId: string): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+
+    if (!group) {
+        return { error: "only the group owner can start voting." };
+    }
+
+    await db.group.update({
+        where: { id: group.id },
+        data: { status: "VOTING" },
+    });
+}
