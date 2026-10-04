@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
+import { RestaurantMap } from "@/components/restaurantMap";
 import { Button } from "@/components/ui/button";
 import {
     addMember as addMemberBE,
@@ -180,32 +181,42 @@ export default function Home() {
                 </form>
             </div>
 
-            <ul className="flex flex-row flex-wrap gap-2 mt-2 space-y-2 ml-2">
-                {groups.map((group) => (
-                    <li key={group.id}>
-                        <Button
-                            variant="outline"
-                            className="flex flex-col items-start justify-between w-full h-auto min-h-[140px] rounded-xl bg-white p-5 text-black shadow-sm text-left align-top"
-                            onClick={() => setOpenGroupId(group.id)}
-                        >
-                            <div className="w-full">
-                                <h3 className="font-semibold text-lg">
-                                    {group.name}
-                                </h3>
-                                <p className="text-xs text-muted-foreground">
-                                    {group.members?.length} members
-                                </p>
-                            </div>
+            <div className="grid gap-6 p-4 lg:grid-cols-2">
+                <ul className="flex flex-row flex-wrap gap-2 mt-2 space-y-2 ml-2">
+                    {groups.map((group) => (
+                        <li key={group.id}>
+                            <Button
+                                variant="outline"
+                                className="flex flex-col items-start justify-between w-full h-auto min-h-[140px] rounded-xl bg-white p-5 text-black shadow-sm text-left align-top"
+                                onClick={() => setOpenGroupId(group.id)}
+                            >
+                                <div className="w-full">
+                                    <h3 className="font-semibold text-lg">
+                                        {group.name}
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground">
+                                        {group.members?.length} members
+                                    </p>
+                                </div>
 
-                            <div>
-                                <p className="text-sm text-gray-600">
-                                    {group.members?.join(", ")}
-                                </p>
-                            </div>
-                        </Button>
-                    </li>
-                ))}
-            </ul>
+                                <div>
+                                    <p className="text-sm text-gray-600">
+                                        {group.members?.join(", ")}
+                                    </p>
+                                </div>
+                            </Button>
+                        </li>
+                    ))}
+                </ul>
+
+                <section className="flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <h2 className="mb-3 text-lg font-semibold">
+                        Nearby Restaurants
+                    </h2>
+                    <RestaurantMap />
+                </section>
+            </div>
+
             {groups.map(
                 (group) =>
                     openGroupId === group.id && (
