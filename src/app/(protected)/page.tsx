@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 
 import {
     addMember as addMemberBE,
+    calculateResults,
     createGroup as createGroupBE,
     deleteGroup as deleteGroupBE,
     type Group,
     getCurrentUsername,
     getGroups,
+    groupToComplete,
     groupToVoting,
     logout,
     removeMember,
@@ -143,6 +145,21 @@ export default function Home() {
             setError("unable to move the group to voting");
         }
     }
+    async function moveGroupToComplete(groupId: string) {
+        setError("");
+        try {
+            const result = await groupToComplete(groupId);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setOpenGroupId(null);
+        } catch {
+            setError("unable to move the group to complete");
+        }
+    }
     return (
         <main>
             <div className="border-b border-gray-200 mb-4 flex justify-between items-center flex-wrap gap-2">
@@ -236,14 +253,12 @@ export default function Home() {
                         </li>
                     ))}
                 </ul>
-                {openGroupId === null && (
-                    <section className="flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                        <h2 className="mb-3 text-lg font-semibold">
-                            Nearby Restaurants
-                        </h2>
-                        <RestaurantMap />
-                    </section>
-                )}
+                <section className="relative z-0 isolate flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-sky-100 p-4 shadow-sm">
+                    <h2 className="mb-3 text-lg font-semibold">
+                        Nearby Restaurants
+                    </h2>
+                    <RestaurantMap />
+                </section>
             </div>
 
             {groups.map(
@@ -275,15 +290,27 @@ export default function Home() {
                                         )}
                                         {user === group.ownerId && (
                                             <>
-                                                <Button
-                                                    onClick={() =>
-                                                        moveGroupToVoting(
-                                                            group.id,
-                                                        )
-                                                    }
-                                                >
-                                                    Start Voting
-                                                </Button>
+                                                {group.status === "VOTING" ? (
+                                                    <Button
+                                                        onClick={() =>
+                                                            moveGroupToComplete(
+                                                                group.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Complete Voting
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        onClick={() =>
+                                                            moveGroupToVoting(
+                                                                group.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Start Voting
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="destructive"
                                                     size="sm"
