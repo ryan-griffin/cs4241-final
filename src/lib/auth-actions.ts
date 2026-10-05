@@ -190,6 +190,109 @@ export async function deleteGroup(groupId: string): Promise<AuthResult> {
     await db.group.delete({ where: { id: group.id } });
 }
 
+/* 
+Check user is log in 
+check user own group
+check if group still in draft 
+prevents restaurant from bring added 2 times
+create restaurant if it doesn't already exist
+*/
+
+export async function addRestaurantTOGroup(
+    groupId: string,
+    restaurant: {
+        yelpID: string;
+        name: string;
+        imageUrl?: string | null;
+        address?: string | null;
+        city?: string | null;
+        state?: string | null;
+        ZipCode?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+        price?: string | null;
+        YelpRating: number;
+        yelpURL?: string | null;
+    },
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+            status: "DRAFT",
+        },
+        select: {
+            id: true,
+        },
+    });
+
+    if (!group) {
+        return {
+            error: "Only owner can select restaurant before voring starts",
+        };
+    }
+    const existingRestairant = await db.restaurant.findUnique({
+        where: {
+            yelpID: restaurant.yelpID,
+        },
+        select: {
+            id: true,
+        },
+    });
+
+    let restaurantId = existingRestairant?.id;
+
+    if (!restaurantId) {
+        const newRestaurant = await db.restaurant.create({
+            data: {
+                yelpID: restaurant.yelpID,
+                name: restaurant.name,
+                imageUrl: restaurant.imageUrl ?? null,
+                address: restaurant.address ?? null,
+                city: restaurant.city ?? null,
+                state: restaurant.state ?? null,
+                ZipCode: restaurant.ZipCode ?? null,
+                latitude: restaurant.latitude ?? null,
+                longitude: restaurant.longitude ?? null,
+                price: restaurant.price ?? null,
+                YelpRating: restaurant.YelpRating,
+                yelpURL: restaurant.yelpURL ?? null,
+            },
+            select: {
+                id: true,
+            },
+        });
+        restaurantId = newRestaurant.id;
+    }
+    const alreadySeleceted = await db.groupRestaurant.findUnique({
+        where: {
+            groupId_restaurantId: {
+                groupId: group.id,
+                restaurantId,
+            },
+        },
+        select: {
+            groupId: true,
+        },
+    });
+
+    if (alreadySeleceted) {
+        return { error: "restaurant is already selected." };
+    }
+    await db.groupRestaurant.create({
+        data: {
+            groupId: group.id,
+            restaurantId,
+        },
+    });
+}
+
 export async function getCurrentUsername(): Promise<string | null> {
     const currentUser = await getCurrentUser();
     return currentUser?.username ?? null;

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export type Restaurant = {
     id: string;
     name: string;
+    image_url?: string;
     coordinates: { latitude: number; longitude: number };
     rating?: number;
     review_count?: number;
@@ -30,7 +31,11 @@ const RestaurantLeafletMap = dynamic(() => import("./restaurantLeafletMap"), {
     ),
 });
 
-export function RestaurantMap() {
+export function RestaurantMap({
+    onRestaurantsLoaded,
+}: {
+    onRestaurantsLoaded: (restaurants: Restaurant[]) => void;
+}) {
     const [center, setCenter] = useState<Coordinates | null>(null);
     const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
     const [selected, setSelected] = useState<Restaurant | null>(null);
@@ -38,41 +43,46 @@ export function RestaurantMap() {
     const [loading, setLoading] = useState(false);
     const hasRequestedLocation = useRef(false);
 
-    const search = useCallback(async (coordinates: Coordinates) => {
-        setLoading(true);
-        setError("");
-        setSelected(null);
-        try {
-            const params = new URLSearchParams({
-                latitude: String(coordinates.latitude),
-                longitude: String(coordinates.longitude),
-            });
-            const response = await fetch(
-                `/api/restaurants/search?${params.toString()}`,
-            );
-            const data: {
-                businesses?: Restaurant[];
-                error?: string;
-                details?: string;
-            } = await response.json();
-            if (!response.ok) {
-                throw new Error(
-                    [data.error, data.details].filter(Boolean).join(": ") ||
-                        "Could not load restaurants.",
+    const search = useCallback(
+        async (coordinates: Coordinates) => {
+            setLoading(true);
+            setError("");
+            setSelected(null);
+            try {
+                const params = new URLSearchParams({
+                    latitude: String(coordinates.latitude),
+                    longitude: String(coordinates.longitude),
+                });
+                const response = await fetch(
+                    `/api/restaurants/search?${params.toString()}`,
                 );
+                const data: {
+                    businesses?: Restaurant[];
+                    error?: string;
+                    details?: string;
+                } = await response.json();
+                if (!response.ok) {
+                    throw new Error(
+                        [data.error, data.details].filter(Boolean).join(": ") ||
+                            "Could not load restaurants.",
+                    );
+                }
+                const nearbyRestaurants = data.businesses ?? [];
+                setRestaurants(nearbyRestaurants);
+                onRestaurantsLoaded(nearbyRestaurants);
+            } catch (cause) {
+                setRestaurants([]);
+                setError(
+                    cause instanceof Error
+                        ? cause.message
+                        : "could not load restaurants.",
+                );
+            } finally {
+                setLoading(false);
             }
-            setRestaurants(data.businesses ?? []);
-        } catch (cause) {
-            setRestaurants([]);
-            setError(
-                cause instanceof Error
-                    ? cause.message
-                    : "could not load restaurants.",
-            );
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        },
+        [onRestaurantsLoaded],
+    );
 
     useEffect(() => {
         if (hasRequestedLocation.current) {

@@ -1,10 +1,11 @@
 "use client";
 
 import { type FormEvent, useEffect, useState } from "react";
-import { RestaurantMap } from "@/components/restaurantMap";
+import { type Restaurant, RestaurantMap } from "@/components/restaurantMap";
 import { Button } from "@/components/ui/button";
 import {
     addMember as addMemberBE,
+    addRestaurantTOGroup,
     createGroup as createGroupBE,
     deleteGroup as deleteGroupBE,
     type Group,
@@ -20,9 +21,15 @@ export default function Home() {
     const [groupName, setGroupName] = useState("");
     const [memberUsername, setMemberUsername] = useState("");
     const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+    const [SelectRestaurantsOPen, setSelectedRestaurantsOpen] = useState(false);
     const [addGroupMembersOpen, setAddGroupMembersOpen] = useState(false);
     const [error, setError] = useState("");
     const [user, setUser] = useState<string | null>(null);
+    const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>(
+        [],
+    );
+    const [restaurantSelectionGroupId, setRestaurantSelectionGroupId] =
+        useState<string | null>(null);
 
     useEffect(() => {
         let isActive = true;
@@ -213,7 +220,11 @@ export default function Home() {
                     <h2 className="mb-3 text-lg font-semibold">
                         Nearby Restaurants
                     </h2>
-                    <RestaurantMap />
+                    <RestaurantMap
+                        onRestaurantsLoaded={(restaurants) => {
+                            setNearbyRestaurants(restaurants);
+                        }}
+                    />
                 </section>
             </div>
 
@@ -222,7 +233,7 @@ export default function Home() {
                     openGroupId === group.id && (
                         <div
                             key={group.id}
-                            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+                            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4"
                         >
                             <section
                                 className="relative w-full max-w-2xl rounded-lg bg-white p-6 text-black shadow-xl"
@@ -244,6 +255,24 @@ export default function Home() {
                                                 Leave Group
                                             </Button>
                                         )}
+
+                                        {user === group.ownerId &&
+                                            group.status === "DRAFT" && (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setRestaurantSelectionGroupId(
+                                                            group.id,
+                                                        );
+                                                        setSelectedRestaurantsOpen(
+                                                            true,
+                                                        );
+                                                    }}
+                                                >
+                                                    Select Restaurants
+                                                </Button>
+                                            )}
                                         {user === group.ownerId && (
                                             <Button
                                                 variant="destructive"
@@ -353,6 +382,203 @@ export default function Home() {
                                         ))}
                                 </div>
                             </section>
+                            {SelectRestaurantsOPen && (
+                                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                                    <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
+                                        <h2 className="text-xl font-semibold">
+                                            Select Restaurants
+                                        </h2>
+
+                                        <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
+                                            {nearbyRestaurants.length > 0 ? (
+                                                nearbyRestaurants.map(
+                                                    (restaurant) => (
+                                                        <div
+                                                            key={restaurant.id}
+                                                            className="flex items-center justify-between rounded-lg border p-3"
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                {restaurant.image_url && (
+                                                                    <img
+                                                                        src={
+                                                                            restaurant.image_url
+                                                                        }
+                                                                        alt={
+                                                                            restaurant.name
+                                                                        }
+                                                                        className="h-16 w-16 rounded-lg object-cover"
+                                                                    />
+                                                                )}
+                                                                <div>
+                                                                    <p className="font-medium">
+                                                                        {
+                                                                            restaurant.name
+                                                                        }
+                                                                    </p>
+                                                                    {restaurant.categories &&
+                                                                        restaurant
+                                                                            .categories
+                                                                            .length >
+                                                                            0 && (
+                                                                            <p className="text-sm text-gray-600">
+                                                                                {restaurant.categories
+                                                                                    .map(
+                                                                                        (
+                                                                                            category,
+                                                                                        ) =>
+                                                                                            category.title,
+                                                                                    )
+                                                                                    .join(
+                                                                                        ", ",
+                                                                                    )}
+                                                                            </p>
+                                                                        )}
+                                                                    <div className="flex items-center gap-2 whitespace-nowrap text-sm text-gray-600">
+                                                                        {restaurant.rating !==
+                                                                            undefined && (
+                                                                            <span>
+                                                                                ⭐️{" "}
+                                                                                {
+                                                                                    restaurant.rating
+                                                                                }
+                                                                            </span>
+                                                                        )}
+                                                                        {restaurant.price && (
+                                                                            <span>
+                                                                                {
+                                                                                    restaurant.price
+                                                                                }{" "}
+                                                                            </span>
+                                                                        )}
+                                                                        {restaurant.review_count !==
+                                                                            undefined && (
+                                                                            <span>
+                                                                                {
+                                                                                    restaurant.review_count
+                                                                                }{" "}
+                                                                                reviews{" "}
+                                                                            </span>
+                                                                        )}
+                                                                        {restaurant
+                                                                            .business_hours?.[0] && (
+                                                                            <p className="text-sm">
+                                                                                {restaurant
+                                                                                    .business_hours[0]
+                                                                                    .is_open_now ? (
+                                                                                    <span className="font-medium text-green-600">
+                                                                                        Open
+                                                                                        Now
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="font-medium text-red-600">
+                                                                                        Closed
+                                                                                        Now
+                                                                                    </span>
+                                                                                )}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                    <p className="text-sm text-gray-500">
+                                                                        {restaurant.location.display_address.join(
+                                                                            ", ",
+                                                                        )}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2">
+                                                                <a
+                                                                    href={
+                                                                        restaurant.url
+                                                                    }
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="text-sm text-blue-600 hover:underline"
+                                                                >
+                                                                    View on Yelp
+                                                                </a>
+
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    onClick={async () => {
+                                                                        console.log(
+                                                                            "Selecting restaurant:",
+                                                                            restaurant.name,
+                                                                            "Group ID:",
+                                                                            restaurantSelectionGroupId,
+                                                                        );
+                                                                        if (
+                                                                            !restaurantSelectionGroupId
+                                                                        ) {
+                                                                            return;
+                                                                        }
+                                                                        const result =
+                                                                            await addRestaurantTOGroup(
+                                                                                restaurantSelectionGroupId,
+                                                                                {
+                                                                                    yelpID: restaurant.id,
+                                                                                    name: restaurant.name,
+                                                                                    imageUrl:
+                                                                                        restaurant.image_url ??
+                                                                                        null,
+                                                                                    address:
+                                                                                        restaurant.location.display_address.join(
+                                                                                            ", ",
+                                                                                        ),
+                                                                                    latitude:
+                                                                                        restaurant
+                                                                                            .coordinates
+                                                                                            .latitude,
+                                                                                    longitude:
+                                                                                        restaurant
+                                                                                            .coordinates
+                                                                                            .longitude,
+                                                                                    price:
+                                                                                        restaurant.price ??
+                                                                                        null,
+                                                                                    YelpRating:
+                                                                                        restaurant.rating ??
+                                                                                        0,
+                                                                                    yelpURL:
+                                                                                        restaurant.url,
+                                                                                },
+                                                                            );
+                                                                        if (
+                                                                            result?.error
+                                                                        ) {
+                                                                            setError(
+                                                                                result.error,
+                                                                            );
+                                                                            return;
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    select
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    ),
+                                                )
+                                            ) : (
+                                                <p className="text-sm text-gray-500">
+                                                    No Nearby restaurants found
+                                                </p>
+                                            )}
+                                        </div>
+                                        <Button
+                                            className="mt-4"
+                                            onClick={() =>
+                                                setSelectedRestaurantsOpen(
+                                                    false,
+                                                )
+                                            }
+                                        >
+                                            Close
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     ),
             )}
