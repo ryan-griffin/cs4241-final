@@ -1,15 +1,20 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { RestaurantMap } from "@/components/restaurantMap";
 import { Button } from "@/components/ui/button";
+
 import {
     addMember as addMemberBE,
+    calculateResults,
     createGroup as createGroupBE,
     deleteGroup as deleteGroupBE,
     type Group,
     getCurrentUsername,
     getGroups,
+    groupToComplete,
+    groupToVoting,
     logout,
     removeMember,
 } from "@/lib/auth-actions";
@@ -124,6 +129,37 @@ export default function Home() {
             setError("unable to delete the group");
         }
     }
+
+    async function moveGroupToVoting(groupId: string) {
+        setError("");
+        try {
+            const result = await groupToVoting(groupId);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setOpenGroupId(null);
+        } catch {
+            setError("unable to move the group to voting");
+        }
+    }
+    async function moveGroupToComplete(groupId: string) {
+        setError("");
+        try {
+            const result = await groupToComplete(groupId);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups(await getGroups());
+            setOpenGroupId(null);
+        } catch {
+            setError("unable to move the group to complete");
+        }
+    }
     return (
         <main>
             <div className="border-b border-gray-200 mb-4 flex justify-between items-center flex-wrap gap-2">
@@ -161,15 +197,24 @@ export default function Home() {
                         )}
                     </form>
                 ) : (
-                    <Button
-                        className="mt-2 ml-2 mr-2 mb-2"
-                        variant="outline"
-                        onClick={() => setIsCreateOpen(true)}
-                    >
-                        Create Group
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            className="mt-2 ml-2 mr-2 mb-2"
+                            variant="outline"
+                            onClick={() => setIsCreateOpen(true)}
+                        >
+                            Create Group
+                        </Button>
+                        <Link href="/votingPage">
+                            <Button
+                                className="mt-2 mr-2 mb-2"
+                                variant="outline"
+                            >
+                                Voting
+                            </Button>
+                        </Link>
+                    </div>
                 )}
-
                 <form action={logout}>
                     <Button
                         type="submit"
@@ -182,7 +227,7 @@ export default function Home() {
             </div>
 
             <div className="grid gap-6 p-4 lg:grid-cols-2">
-                <ul className="flex flex-row flex-wrap gap-2 mt-2 space-y-2 ml-2">
+                <ul className="flex flex-row flex-wrap content-start gap-2 mt-2 ml-2">
                     {groups.map((group) => (
                         <li key={group.id}>
                             <Button
@@ -208,14 +253,12 @@ export default function Home() {
                         </li>
                     ))}
                 </ul>
-                {openGroupId === null && (
-                    <section className="flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-                        <h2 className="mb-3 text-lg font-semibold">
-                            Nearby Restaurants
-                        </h2>
-                        <RestaurantMap />
-                    </section>
-                )}
+                <section className="relative z-0 isolate flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-sky-100 p-4 shadow-sm">
+                    <h2 className="mb-3 text-lg font-semibold">
+                        Nearby Restaurants
+                    </h2>
+                    <RestaurantMap />
+                </section>
             </div>
 
             {groups.map(
@@ -246,16 +289,39 @@ export default function Home() {
                                             </Button>
                                         )}
                                         {user === group.ownerId && (
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() => {
-                                                    deleteGroup(group.id);
-                                                    setOpenGroupId(null);
-                                                }}
-                                            >
-                                                Delete Group
-                                            </Button>
+                                            <>
+                                                {group.status === "VOTING" ? (
+                                                    <Button
+                                                        onClick={() =>
+                                                            moveGroupToComplete(
+                                                                group.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Complete Voting
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        onClick={() =>
+                                                            moveGroupToVoting(
+                                                                group.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Start Voting
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        deleteGroup(group.id);
+                                                        setOpenGroupId(null);
+                                                    }}
+                                                >
+                                                    Delete Group
+                                                </Button>
+                                            </>
                                         )}
                                         <Button
                                             variant="secondary"
@@ -279,35 +345,29 @@ export default function Home() {
                                     <h3 className="text-lg font-semibold mb-2">
                                         Group Members
                                     </h3>
-                                    {group.members.length > 0 ? (
-                                        <ul className="text-gray-700 list-disc pl-5 space-y-1">
-                                            {group.members.map((member) => (
-                                                <li key={member}>
-                                                    {member}
-                                                    {user === group.ownerId &&
-                                                        member !==
-                                                            group.ownerId && (
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="ml-2"
-                                                                onClick={() =>
-                                                                    deleteMember(
-                                                                        member,
-                                                                    )
-                                                                }
-                                                            >
-                                                                Remove
-                                                            </Button>
-                                                        )}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : (
-                                        <p className="text-gray-500">
-                                            No members
-                                        </p>
-                                    )}
+                                    <ul className="text-gray-700 list-disc pl-5 space-y-1">
+                                        {group.members.map((member) => (
+                                            <li key={member}>
+                                                {member}
+                                                {user === group.ownerId &&
+                                                    member !==
+                                                        group.ownerId && (
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="ml-2"
+                                                            onClick={() =>
+                                                                deleteMember(
+                                                                    member,
+                                                                )
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    )}
+                                            </li>
+                                        ))}
+                                    </ul>
                                     {user === group.ownerId &&
                                         (addGroupMembersOpen ? (
                                             <form onSubmit={addMemberToGroup}>
