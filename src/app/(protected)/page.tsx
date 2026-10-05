@@ -336,7 +336,7 @@ export default function Home() {
                             className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4"
                         >
                             <section
-                                className="relative w-full max-w-2xl rounded-lg bg-white p-6 text-black shadow-xl"
+                                className="relative w-full max-w-3xl rounded-lg bg-white p-6 text-black shadow-xl"
                                 role="dialog"
                             >
                                 <div className="flex items-center justify-between border-b pb-4 mb-4">
