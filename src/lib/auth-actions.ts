@@ -12,6 +12,11 @@ export type Result = {
     restaurantId: string;
     name: string;
     points: number;
+    imageUrl: string | null;
+    address: string | null;
+    price: string | null;
+    YelpRating: number;
+    yelpURL: string | null;
 };
 
 export type CalculateResultsResult = { error: string } | { results: Result[] };
@@ -23,6 +28,17 @@ export type Group = {
     createdAt: Date;
     ownerId: string;
     members: string[];
+    restaurants: {
+        id: string;
+        yelpID: string;
+        name: string;
+        imageUrl: string | null;
+        address: string | null;
+        price: string | null;
+        YelpRating: number;
+        yelpURL: string | null;
+        userRating: number | null;
+    }[];
 };
 
 export async function getGroups(): Promise<Group[]> {
@@ -33,7 +49,29 @@ export async function getGroups(): Promise<Group[]> {
 
     const groups = await db.group.findMany({
         where: { members: { some: { userId: currentUser.username } } },
-        include: { members: { select: { userId: true } } },
+        include: {
+            members: { select: { userId: true } },
+            restaurants: {
+                include: {
+                    restaurant: {
+                        select: {
+                            id: true,
+                            yelpID: true,
+                            name: true,
+                            imageUrl: true,
+                            address: true,
+                            price: true,
+                            YelpRating: true,
+                            yelpURL: true,
+                        },
+                    },
+                    ratings: {
+                        where: { userId: currentUser.username },
+                        select: { score: true },
+                    },
+                },
+            },
+        },
         orderBy: { createdAt: "desc" },
     });
 
@@ -44,6 +82,10 @@ export async function getGroups(): Promise<Group[]> {
         createdAt: group.createdAt,
         ownerId: group.ownerId,
         members: group.members.map((member) => member.userId),
+        restaurants: group.restaurants.map(({ restaurant, ratings }) => ({
+            ...restaurant,
+            userRating: ratings[0]?.score ?? null,
+        })),
     }));
 }
 
@@ -301,6 +343,49 @@ export async function addRestaurantTOGroup(
         },
     });
 }
+export async function removeRestaurantFromGroup(
+    groupId: string,
+    restaurantId: string,
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+
+    if (!group) {
+        return { error: "only the group owner can remove restaurants." };
+    }
+
+    const groupRestaurant = await db.groupRestaurant.findUnique({
+        where: {
+            groupId_restaurantId: {
+                groupId: group.id,
+                restaurantId,
+            },
+        },
+    });
+
+    if (!groupRestaurant) {
+        return { error: "restaurant is not in the group." };
+    }
+
+    await db.groupRestaurant.delete({
+        where: {
+            groupId_restaurantId: {
+                groupId: group.id,
+                restaurantId,
+            },
+        },
+    });
+}
 
 export async function getCurrentUsername(): Promise<string | null> {
     const currentUser = await getCurrentUser();
@@ -415,6 +500,62 @@ export async function groupToComplete(groupId: string): Promise<AuthResult> {
     });
 }
 
+export async function rateRestaurant(
+    groupId: string,
+    restaurantId: string,
+    score: number,
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    if (!Number.isInteger(score) || score < 1 || score > 5) {
+        return { error: "rating must be between 1 and 5." };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            status: "VOTING",
+            members: { some: { userId: currentUser.username } },
+        },
+        select: { id: true },
+    });
+    if (!group) {
+        return { error: "you must be a group member to rate during voting." };
+    }
+
+    const groupRestaurant = await db.groupRestaurant.findUnique({
+        where: {
+            groupId_restaurantId: {
+                groupId: group.id,
+                restaurantId,
+            },
+        },
+        select: { groupId: true },
+    });
+    if (!groupRestaurant) {
+        return { error: "restaurant is not selected for this group." };
+    }
+
+    await db.rating.upsert({
+        where: {
+            groupId_restaurantId_userId: {
+                groupId: group.id,
+                restaurantId,
+                userId: currentUser.username,
+            },
+        },
+        create: {
+            groupId: group.id,
+            restaurantId,
+            userId: currentUser.username,
+            score,
+        },
+        update: { score },
+    });
+}
+
 export async function calculateResults(
     groupId: string,
 ): Promise<CalculateResultsResult> {
@@ -427,17 +568,32 @@ export async function calculateResults(
             id: groupId,
             ownerId: currentUser.username,
         },
-        select: { id: true },
+        select: { id: true, status: true },
     });
 
     if (!group) {
         return { error: "only the group owner can compile results." };
     }
+    if (group.status !== "VOTING" && group.status !== "COMPLETE") {
+        return {
+            error: "results can only be calculated during voting or completion.",
+        };
+    }
 
     const restaurants = await db.groupRestaurant.findMany({
         where: { groupId: group.id },
         include: {
-            restaurant: { select: { id: true, name: true } },
+            restaurant: {
+                select: {
+                    id: true,
+                    name: true,
+                    imageUrl: true,
+                    address: true,
+                    price: true,
+                    YelpRating: true,
+                    yelpURL: true,
+                },
+            },
             ratings: { select: { score: true } },
         },
     });
@@ -458,6 +614,11 @@ export async function calculateResults(
         .map(({ restaurant, ratings }) => ({
             restaurantId: restaurant.id,
             name: restaurant.name,
+            imageUrl: restaurant.imageUrl,
+            address: restaurant.address,
+            price: restaurant.price,
+            YelpRating: restaurant.YelpRating,
+            yelpURL: restaurant.yelpURL,
             points: ratings.reduce((total, rating) => {
                 const points = pointsByScore[rating.score];
                 if (points === undefined) {

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { type FormEvent, useEffect, useState } from "react";
 import { type Restaurant, RestaurantMap } from "@/components/restaurantMap";
 import { Button } from "@/components/ui/button";
@@ -17,8 +16,19 @@ import {
     groupToComplete,
     groupToVoting,
     logout,
+    type Result,
+    rateRestaurant,
     removeMember,
+    removeRestaurantFromGroup,
 } from "@/lib/auth-actions";
+
+const ratingLabels: Record<number, string> = {
+    1: "Won't go",
+    2: "Don't want but would go",
+    3: "Neutral",
+    4: "Want",
+    5: "Top choice",
+};
 
 export default function Home() {
     const [groups, setGroups] = useState<Group[]>([]);
@@ -35,6 +45,14 @@ export default function Home() {
     );
     const [restaurantSelectionGroupId, setRestaurantSelectionGroupId] =
         useState<string | null>(null);
+    const [results, setResults] = useState<{
+        groupName: string;
+        restaurants: Result[];
+    } | null>(null);
+    const [calculatingResultsGroupId, setCalculatingResultsGroupId] = useState<
+        string | null
+    >(null);
+    const [savingRating, setSavingRating] = useState<string | null>(null);
 
     useEffect(() => {
         let isActive = true;
@@ -68,7 +86,7 @@ export default function Home() {
         setError("");
         try {
             const result = await createGroupBE(name);
-            if (result?.error) {
+            if (result && "error" in result) {
                 setError(result.error);
                 return;
             }
@@ -167,6 +185,101 @@ export default function Home() {
             setError("unable to move the group to complete");
         }
     }
+
+    async function calculateGroupResults(groupId: string) {
+        setError("");
+        setCalculatingResultsGroupId(groupId);
+        try {
+            const result = await calculateResults(groupId);
+            if ("error" in result) {
+                setError(result.error);
+                return;
+            }
+            const group = groups.find(({ id }) => id === groupId);
+            if (!group) {
+                setError("unable to find the group results");
+                return;
+            }
+            setResults({ groupName: group.name, restaurants: result.results });
+        } catch {
+            setError("unable to calculate the group results");
+        } finally {
+            setCalculatingResultsGroupId(null);
+        }
+    }
+
+    async function saveRating(
+        groupId: string,
+        restaurantId: string,
+        score: number,
+    ) {
+        const key = `${groupId}:${restaurantId}`;
+        setSavingRating(key);
+        setError("");
+        try {
+            const result = await rateRestaurant(groupId, restaurantId, score);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+
+            setGroups((currentGroups) =>
+                currentGroups.map((group) =>
+                    group.id === groupId
+                        ? {
+                              ...group,
+                              restaurants: group.restaurants.map(
+                                  (restaurant) =>
+                                      restaurant.id === restaurantId
+                                          ? { ...restaurant, userRating: score }
+                                          : restaurant,
+                              ),
+                          }
+                        : group,
+                ),
+            );
+        } catch {
+            setError("unable to save your rating");
+        } finally {
+            setSavingRating(null);
+        }
+    }
+
+    function openVotingGroup() {
+        const votingGroup = groups.find((group) => group.status === "VOTING");
+        if (votingGroup) {
+            setError("");
+            setOpenGroupId(votingGroup.id);
+        } else {
+            setError("No groups are currently voting");
+        }
+    }
+
+    const selectedRestaurants =
+        groups.find((group) => group.id === restaurantSelectionGroupId)
+            ?.restaurants ?? [];
+    const selectedRestaurantIds = new Set(
+        selectedRestaurants.map((restaurant) => restaurant.yelpID),
+    );
+    const sortedNearbyRestaurants = [...nearbyRestaurants].sort((a, b) => {
+        const selectedOrder =
+            Number(selectedRestaurantIds.has(b.id)) -
+            Number(selectedRestaurantIds.has(a.id));
+        if (selectedOrder !== 0) {
+            return selectedOrder;
+        }
+
+        const aDistance = Number.isFinite(a.distance) ? a.distance : undefined;
+        const bDistance = Number.isFinite(b.distance) ? b.distance : undefined;
+        if (aDistance === undefined) {
+            return bDistance === undefined ? 0 : 1;
+        }
+        if (bDistance === undefined) {
+            return -1;
+        }
+        return aDistance - bDistance;
+    });
+
     return (
         <main>
             <div className="border-b border-gray-200 mb-4 flex justify-between items-center flex-wrap gap-2">
@@ -212,14 +325,6 @@ export default function Home() {
                         >
                             Create Group
                         </Button>
-                        <Link href="/votingPage">
-                            <Button
-                                className="mt-2 mr-2 mb-2"
-                                variant="outline"
-                            >
-                                Voting
-                            </Button>
-                        </Link>
                     </div>
                 )}
                 <form action={logout}>
@@ -232,6 +337,12 @@ export default function Home() {
                     </Button>
                 </form>
             </div>
+
+            {error && !openGroupId && !isCreateOpen && (
+                <p className="mx-4 text-sm text-red-600" role="alert">
+                    {error}
+                </p>
+            )}
 
             <div className="grid gap-6 p-4 lg:grid-cols-2">
                 <ul className="flex flex-row flex-wrap content-start gap-2 mt-2 ml-2">
@@ -260,7 +371,7 @@ export default function Home() {
                         </li>
                     ))}
                 </ul>
-                <section className="relative z-0 isolate flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-sky-100 p-4 shadow-sm">
+                <section className="relative z-0 isolate flex min-h-[520px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
                     <h2 className="mb-3 text-lg font-semibold">
                         Nearby Restaurants
                     </h2>
@@ -280,7 +391,7 @@ export default function Home() {
                             className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/60 p-4"
                         >
                             <section
-                                className="relative w-full max-w-2xl rounded-lg bg-white p-6 text-black shadow-xl"
+                                className="relative w-full max-w-3xl rounded-lg bg-white p-6 text-black shadow-xl"
                                 role="dialog"
                             >
                                 <div className="flex items-center justify-between border-b pb-4 mb-4">
@@ -289,17 +400,20 @@ export default function Home() {
                                     </h2>
 
                                     <div className="flex items-center gap-2">
-                                        {user !== group.ownerId && (
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() =>
-                                                    deleteMember(user || "")
-                                                }
-                                            >
-                                                Leave Group
-                                            </Button>
-                                        )}
+                                        {user &&
+                                            user !== group.ownerId &&
+                                            group.status !== "VOTING" &&
+                                            group.status !== "COMPLETE" && (
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        deleteMember(user || "")
+                                                    }
+                                                >
+                                                    Leave Group
+                                                </Button>
+                                            )}
 
                                         {user === group.ownerId &&
                                             group.status === "DRAFT" && (
@@ -318,9 +432,25 @@ export default function Home() {
                                                     Select Restaurants
                                                 </Button>
                                             )}
-                                        {user === group.ownerId && (
+                                        {group.status === "VOTING" && (
                                             <>
-                                                {group.status === "VOTING" ? (
+                                                <Button
+                                                    disabled={
+                                                        calculatingResultsGroupId ===
+                                                        group.id
+                                                    }
+                                                    onClick={() =>
+                                                        calculateGroupResults(
+                                                            group.id,
+                                                        )
+                                                    }
+                                                >
+                                                    {calculatingResultsGroupId ===
+                                                    group.id
+                                                        ? "Calculating..."
+                                                        : "Calculate Results"}
+                                                </Button>
+                                                {user === group.ownerId && (
                                                     <Button
                                                         onClick={() =>
                                                             moveGroupToComplete(
@@ -328,9 +458,78 @@ export default function Home() {
                                                             )
                                                         }
                                                     >
-                                                        Complete Voting
+                                                        Move to Complete
+                                                    </Button>
+                                                )}
+                                                {user &&
+                                                    user !== group.ownerId && (
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                deleteMember(
+                                                                    user,
+                                                                )
+                                                            }
+                                                        >
+                                                            Leave Group
+                                                        </Button>
+                                                    )}
+                                            </>
+                                        )}
+                                        {group.status === "COMPLETE" && (
+                                            <>
+                                                <Button
+                                                    disabled={
+                                                        calculatingResultsGroupId ===
+                                                        group.id
+                                                    }
+                                                    onClick={() =>
+                                                        calculateGroupResults(
+                                                            group.id,
+                                                        )
+                                                    }
+                                                >
+                                                    {calculatingResultsGroupId ===
+                                                    group.id
+                                                        ? "Calculating..."
+                                                        : "Calculate Results"}
+                                                </Button>
+                                                {user === group.ownerId ? (
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            deleteGroup(
+                                                                group.id,
+                                                            );
+                                                            setOpenGroupId(
+                                                                null,
+                                                            );
+                                                        }}
+                                                    >
+                                                        Delete Group
                                                     </Button>
                                                 ) : (
+                                                    user && (
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                deleteMember(
+                                                                    user,
+                                                                )
+                                                            }
+                                                        >
+                                                            Leave Group
+                                                        </Button>
+                                                    )
+                                                )}
+                                            </>
+                                        )}
+                                        {group.status === "DRAFT" &&
+                                            user === group.ownerId && (
+                                                <>
                                                     <Button
                                                         onClick={() =>
                                                             moveGroupToVoting(
@@ -338,21 +537,21 @@ export default function Home() {
                                                             )
                                                         }
                                                     >
-                                                        Start Voting
+                                                        Move to Voting
                                                     </Button>
-                                                )}
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        deleteGroup(group.id);
-                                                        setOpenGroupId(null);
-                                                    }}
-                                                >
-                                                    Delete Group
-                                                </Button>
-                                            </>
-                                        )}
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            deleteGroup(
+                                                                group.id,
+                                                            );
+                                                        }}
+                                                    >
+                                                        Delete Group
+                                                    </Button>
+                                                </>
+                                            )}
                                         <Button
                                             variant="secondary"
                                             onClick={() => setOpenGroupId(null)}
@@ -443,17 +642,162 @@ export default function Home() {
                                             </Button>
                                         ))}
                                 </div>
+                                {group.status === "VOTING" && (
+                                    <section className="mt-6">
+                                        <h3 className="mb-3 text-lg font-semibold">
+                                            Rate the selected restaurants
+                                        </h3>
+                                        <div className="mb-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+                                            {[1, 2, 3, 4, 5].map((score) => (
+                                                <span
+                                                    key={score}
+                                                    className="whitespace-nowrap"
+                                                >
+                                                    {score} ={" "}
+                                                    {ratingLabels[score]}
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="max-h-[50vh] space-y-3 overflow-y-auto">
+                                            {group.restaurants.length > 0 ? (
+                                                group.restaurants.map(
+                                                    (restaurant) => {
+                                                        const ratingKey = `${group.id}:${restaurant.id}`;
+                                                        return (
+                                                            <article
+                                                                key={
+                                                                    restaurant.id
+                                                                }
+                                                                className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-3"
+                                                            >
+                                                                <div className="flex min-w-0 items-center gap-3">
+                                                                    {restaurant.imageUrl && (
+                                                                        <img
+                                                                            src={
+                                                                                restaurant.imageUrl
+                                                                            }
+                                                                            alt=""
+                                                                            className="h-16 w-16 rounded-lg object-cover"
+                                                                        />
+                                                                    )}
+                                                                    <div className="min-w-0">
+                                                                        <h4 className="font-medium">
+                                                                            {
+                                                                                restaurant.name
+                                                                            }
+                                                                        </h4>
+                                                                        <p className="text-sm text-gray-600">
+                                                                            {restaurant.YelpRating >
+                                                                                0 &&
+                                                                                `⭐ ${restaurant.YelpRating}`}
+                                                                            {restaurant.price &&
+                                                                                ` · ${restaurant.price}`}
+                                                                        </p>
+                                                                        {restaurant.address && (
+                                                                            <p className="text-sm text-gray-500">
+                                                                                {
+                                                                                    restaurant.address
+                                                                                }
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <fieldset
+                                                                    disabled={
+                                                                        savingRating ===
+                                                                        ratingKey
+                                                                    }
+                                                                    className="flex items-center gap-2"
+                                                                >
+                                                                    <legend className="sr-only">
+                                                                        Rate{" "}
+                                                                        {
+                                                                            restaurant.name
+                                                                        }
+                                                                    </legend>
+                                                                    {[
+                                                                        1, 2, 3,
+                                                                        4, 5,
+                                                                    ].map(
+                                                                        (
+                                                                            score,
+                                                                        ) => (
+                                                                            <label
+                                                                                key={
+                                                                                    score
+                                                                                }
+                                                                                className="flex cursor-pointer items-center gap-1 text-sm"
+                                                                                title={
+                                                                                    ratingLabels[
+                                                                                        score
+                                                                                    ]
+                                                                                }
+                                                                            >
+                                                                                <input
+                                                                                    type="radio"
+                                                                                    name={`rating-${group.id}-${restaurant.id}`}
+                                                                                    value={
+                                                                                        score
+                                                                                    }
+                                                                                    checked={
+                                                                                        restaurant.userRating ===
+                                                                                        score
+                                                                                    }
+                                                                                    aria-label={`${score} - ${ratingLabels[score]}`}
+                                                                                    onChange={() =>
+                                                                                        saveRating(
+                                                                                            group.id,
+                                                                                            restaurant.id,
+                                                                                            score,
+                                                                                        )
+                                                                                    }
+                                                                                />
+                                                                                <span>
+                                                                                    {
+                                                                                        score
+                                                                                    }
+                                                                                </span>
+                                                                            </label>
+                                                                        ),
+                                                                    )}
+                                                                </fieldset>
+                                                            </article>
+                                                        );
+                                                    },
+                                                )
+                                            ) : (
+                                                <p className="text-sm text-gray-600">
+                                                    No restaurants have been
+                                                    selected for this group.
+                                                </p>
+                                            )}
+                                        </div>
+                                    </section>
+                                )}
                             </section>
                             {SelectRestaurantsOPen && (
                                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                                    <div className="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg">
-                                        <h2 className="text-xl font-semibold">
-                                            Select Restaurants
-                                        </h2>
-
-                                        <div className="mt-4 max-h-80 space-y-2 overflow-y-auto">
-                                            {nearbyRestaurants.length > 0 ? (
-                                                nearbyRestaurants.map(
+                                    <div className="w-full max-w-[37rem] rounded-lg bg-white p-6 shadow-lg">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h2 className="text-xl font-semibold">
+                                                Select Restaurants
+                                            </h2>
+                                            <Button
+                                                size="sm"
+                                                className="ml-auto"
+                                                onClick={() =>
+                                                    setSelectedRestaurantsOpen(
+                                                        false,
+                                                    )
+                                                }
+                                            >
+                                                Close
+                                            </Button>
+                                        </div>
+                                        <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
+                                            {sortedNearbyRestaurants.length >
+                                            0 ? (
+                                                sortedNearbyRestaurants.map(
                                                     (restaurant) => (
                                                         <div
                                                             key={restaurant.id}
@@ -472,11 +816,28 @@ export default function Home() {
                                                                     />
                                                                 )}
                                                                 <div>
-                                                                    <p className="font-medium">
-                                                                        {
-                                                                            restaurant.name
-                                                                        }
-                                                                    </p>
+                                                                    <div className="flex flex-wrap items-baseline gap-x-2">
+                                                                        <p className="font-medium">
+                                                                            {
+                                                                                restaurant.name
+                                                                            }
+                                                                        </p>
+                                                                        <span className="text-sm text-gray-500">
+                                                                            -
+                                                                        </span>
+                                                                        <a
+                                                                            href={
+                                                                                restaurant.url
+                                                                            }
+                                                                            target="_blank"
+                                                                            rel="noopener noreferrer"
+                                                                            className="text-sm text-blue-600 hover:underline"
+                                                                        >
+                                                                            View
+                                                                            on
+                                                                            Yelp
+                                                                        </a>
+                                                                    </div>
                                                                     {restaurant.categories &&
                                                                         restaurant
                                                                             .categories
@@ -549,63 +910,62 @@ export default function Home() {
                                                             </div>
 
                                                             <div className="flex items-center gap-2">
-                                                                <a
-                                                                    href={
-                                                                        restaurant.url
-                                                                    }
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="text-sm text-blue-600 hover:underline"
-                                                                >
-                                                                    View on Yelp
-                                                                </a>
-
                                                                 <Button
                                                                     type="button"
                                                                     size="sm"
                                                                     onClick={async () => {
-                                                                        console.log(
-                                                                            "Selecting restaurant:",
-                                                                            restaurant.name,
-                                                                            "Group ID:",
-                                                                            restaurantSelectionGroupId,
-                                                                        );
                                                                         if (
                                                                             !restaurantSelectionGroupId
                                                                         ) {
                                                                             return;
                                                                         }
-                                                                        const result =
-                                                                            await addRestaurantTOGroup(
-                                                                                restaurantSelectionGroupId,
-                                                                                {
-                                                                                    yelpID: restaurant.id,
-                                                                                    name: restaurant.name,
-                                                                                    imageUrl:
-                                                                                        restaurant.image_url ??
-                                                                                        null,
-                                                                                    address:
-                                                                                        restaurant.location.display_address.join(
-                                                                                            ", ",
-                                                                                        ),
-                                                                                    latitude:
-                                                                                        restaurant
-                                                                                            .coordinates
-                                                                                            .latitude,
-                                                                                    longitude:
-                                                                                        restaurant
-                                                                                            .coordinates
-                                                                                            .longitude,
-                                                                                    price:
-                                                                                        restaurant.price ??
-                                                                                        null,
-                                                                                    YelpRating:
-                                                                                        restaurant.rating ??
-                                                                                        0,
-                                                                                    yelpURL:
-                                                                                        restaurant.url,
-                                                                                },
+                                                                        setError(
+                                                                            "",
+                                                                        );
+                                                                        const selectedRestaurant =
+                                                                            selectedRestaurants.find(
+                                                                                (
+                                                                                    selected,
+                                                                                ) =>
+                                                                                    selected.yelpID ===
+                                                                                    restaurant.id,
                                                                             );
+                                                                        const result =
+                                                                            selectedRestaurant
+                                                                                ? await removeRestaurantFromGroup(
+                                                                                      restaurantSelectionGroupId,
+                                                                                      selectedRestaurant.id,
+                                                                                  )
+                                                                                : await addRestaurantTOGroup(
+                                                                                      restaurantSelectionGroupId,
+                                                                                      {
+                                                                                          yelpID: restaurant.id,
+                                                                                          name: restaurant.name,
+                                                                                          imageUrl:
+                                                                                              restaurant.image_url ??
+                                                                                              null,
+                                                                                          address:
+                                                                                              restaurant.location.display_address.join(
+                                                                                                  ", ",
+                                                                                              ),
+                                                                                          latitude:
+                                                                                              restaurant
+                                                                                                  .coordinates
+                                                                                                  .latitude,
+                                                                                          longitude:
+                                                                                              restaurant
+                                                                                                  .coordinates
+                                                                                                  .longitude,
+                                                                                          price:
+                                                                                              restaurant.price ??
+                                                                                              null,
+                                                                                          YelpRating:
+                                                                                              restaurant.rating ??
+                                                                                              0,
+                                                                                          yelpURL:
+                                                                                              restaurant.url,
+                                                                                      },
+                                                                                  );
                                                                         if (
                                                                             result?.error
                                                                         ) {
@@ -614,9 +974,16 @@ export default function Home() {
                                                                             );
                                                                             return;
                                                                         }
+                                                                        setGroups(
+                                                                            await getGroups(),
+                                                                        );
                                                                     }}
                                                                 >
-                                                                    select
+                                                                    {selectedRestaurantIds.has(
+                                                                        restaurant.id,
+                                                                    )
+                                                                        ? "Remove"
+                                                                        : "Select"}
                                                                 </Button>
                                                             </div>
                                                         </div>
@@ -628,21 +995,89 @@ export default function Home() {
                                                 </p>
                                             )}
                                         </div>
-                                        <Button
-                                            className="mt-4"
-                                            onClick={() =>
-                                                setSelectedRestaurantsOpen(
-                                                    false,
-                                                )
-                                            }
-                                        >
-                                            Close
-                                        </Button>
                                     </div>
                                 </div>
                             )}
                         </div>
                     ),
+            )}
+            {results && (
+                <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 p-4">
+                    <section
+                        className="w-full max-w-2xl rounded-lg bg-white p-6 text-black shadow-xl"
+                        role="dialog"
+                        aria-modal="true"
+                        aria-labelledby="results-title"
+                    >
+                        <div className="mb-4 flex items-center justify-between border-b pb-4">
+                            <div>
+                                <h2
+                                    id="results-title"
+                                    className="text-xl font-bold"
+                                >
+                                    Top Restaurants
+                                </h2>
+                                <p className="text-sm text-gray-600">
+                                    Results for {results.groupName}
+                                </p>
+                            </div>
+                            <Button
+                                variant="secondary"
+                                onClick={() => setResults(null)}
+                            >
+                                Close
+                            </Button>
+                        </div>
+                        {results.restaurants.length > 0 ? (
+                            <ol className="max-h-[70vh] space-y-3 overflow-y-auto">
+                                {results.restaurants.map((restaurant) => (
+                                    <li
+                                        key={restaurant.restaurantId}
+                                        className="flex gap-4 rounded-lg border p-4"
+                                    >
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                                <h3 className="font-semibold">
+                                                    {restaurant.place}.{" "}
+                                                    {restaurant.name}
+                                                </h3>
+                                                <p className="font-semibold">
+                                                    Score: {restaurant.points}{" "}
+                                                    points
+                                                </p>
+                                            </div>
+                                            <p className="mt-1 text-sm text-gray-600">
+                                                {restaurant.YelpRating > 0 &&
+                                                    `⭐ ${restaurant.YelpRating}`}
+                                                {restaurant.price &&
+                                                    ` · ${restaurant.price}`}
+                                            </p>
+                                            {restaurant.address && (
+                                                <p className="mt-1 text-sm text-gray-600">
+                                                    {restaurant.address}
+                                                </p>
+                                            )}
+                                            {restaurant.yelpURL && (
+                                                <a
+                                                    href={restaurant.yelpURL}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="mt-2 inline-block text-sm text-blue-600 hover:underline"
+                                                >
+                                                    View on Yelp
+                                                </a>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ol>
+                        ) : (
+                            <p className="text-sm text-gray-600">
+                                No restaurants have eligible votes yet.
+                            </p>
+                        )}
+                    </section>
+                </div>
             )}
         </main>
     );
