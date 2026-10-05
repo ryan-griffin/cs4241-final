@@ -7,6 +7,15 @@ import { db } from "@/lib/db";
 
 export type AuthResult = { error: string } | undefined;
 
+export type Result = {
+    place: number;
+    restaurantId: string;
+    name: string;
+    points: number;
+};
+
+export type CalculateResultsResult = { error: string } | { results: Result[] };
+
 export type Group = {
     id: string;
     name: string;
@@ -358,4 +367,112 @@ export async function login(
 export async function logout(): Promise<void> {
     await deleteSession();
     redirect("/login");
+}
+
+export async function groupToVoting(groupId: string): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+
+    if (!group) {
+        return { error: "only the group owner can start voting." };
+    }
+
+    await db.group.update({
+        where: { id: group.id },
+        data: { status: "VOTING" },
+    });
+}
+
+export async function groupToComplete(groupId: string): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+
+    if (!group) {
+        return { error: "only the group owner can close voting." };
+    }
+
+    await db.group.update({
+        where: { id: group.id },
+        data: { status: "COMPLETE" },
+    });
+}
+
+export async function calculateResults(
+    groupId: string,
+): Promise<CalculateResultsResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+
+    if (!group) {
+        return { error: "only the group owner can compile results." };
+    }
+
+    const restaurants = await db.groupRestaurant.findMany({
+        where: { groupId: group.id },
+        include: {
+            restaurant: { select: { id: true, name: true } },
+            ratings: { select: { score: true } },
+        },
+    });
+
+    const pointsByScore: Record<number, number> = {
+        2: 1,
+        3: 3,
+        4: 4,
+        5: 5,
+    };
+
+    const results = restaurants
+        .filter(
+            ({ ratings }) =>
+                ratings.length > 0 &&
+                !ratings.some((rating) => rating.score === 1),
+        )
+        .map(({ restaurant, ratings }) => ({
+            restaurantId: restaurant.id,
+            name: restaurant.name,
+            points: ratings.reduce((total, rating) => {
+                const points = pointsByScore[rating.score];
+                if (points === undefined) {
+                    throw new Error(`invalid rating score: ${rating.score}`);
+                }
+                return total + points;
+            }, 0),
+        }))
+        .sort(
+            (first, second) =>
+                second.points - first.points ||
+                first.name.localeCompare(second.name),
+        )
+        .slice(0, 3)
+        .map((result, index) => ({ ...result, place: index + 1 }));
+
+    return { results };
 }
