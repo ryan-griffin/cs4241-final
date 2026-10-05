@@ -204,11 +204,24 @@ export default function Home() {
     const selectedRestaurantIds = new Set(
         selectedRestaurants.map((restaurant) => restaurant.yelpID),
     );
-    const sortedNearbyRestaurants = [...nearbyRestaurants].sort(
-        (a, b) =>
+    const sortedNearbyRestaurants = [...nearbyRestaurants].sort((a, b) => {
+        const selectedOrder =
             Number(selectedRestaurantIds.has(b.id)) -
-            Number(selectedRestaurantIds.has(a.id)),
-    );
+            Number(selectedRestaurantIds.has(a.id));
+        if (selectedOrder !== 0) {
+            return selectedOrder;
+        }
+
+        const aDistance = Number.isFinite(a.distance) ? a.distance : undefined;
+        const bDistance = Number.isFinite(b.distance) ? b.distance : undefined;
+        if (aDistance === undefined) {
+            return bDistance === undefined ? 0 : 1;
+        }
+        if (bDistance === undefined) {
+            return -1;
+        }
+        return aDistance - bDistance;
+    });
 
     return (
         <main>

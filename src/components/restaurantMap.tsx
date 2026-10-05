@@ -8,6 +8,7 @@ export type Restaurant = {
     name: string;
     image_url?: string;
     coordinates: { latitude: number; longitude: number };
+    distance?: number;
     rating?: number;
     review_count?: number;
     price?: string;

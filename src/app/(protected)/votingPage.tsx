@@ -10,6 +10,14 @@ import {
     rateRestaurant,
 } from "@/lib/auth-actions";
 
+const ratingLabels: Record<number, string> = {
+    1: "Won't go",
+    2: "Don't want but would go",
+    3: "Neutral",
+    4: "Want",
+    5: "Top choice",
+};
+
 export default function VotingPage() {
     const [groups, setGroups] = useState<Group[]>([]);
     const [openGroupId, setOpenGroupId] = useState<string | null>(null);
@@ -163,6 +171,16 @@ export default function VotingPage() {
                                 <h3 className="mb-3 text-lg font-semibold">
                                     Rate the selected restaurants
                                 </h3>
+                                <div className="mb-4 flex flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+                                    {[1, 2, 3, 4, 5].map((score) => (
+                                        <span
+                                            key={score}
+                                            className="whitespace-nowrap"
+                                        >
+                                            {score} = {ratingLabels[score]}
+                                        </span>
+                                    ))}
+                                </div>
                                 <div className="max-h-[70vh] space-y-3 overflow-y-auto">
                                     {group.restaurants.length > 0 ? (
                                         group.restaurants.map((restaurant) => {
@@ -220,6 +238,11 @@ export default function VotingPage() {
                                                                 <label
                                                                     key={score}
                                                                     className="flex cursor-pointer items-center gap-1 text-sm"
+                                                                    title={
+                                                                        ratingLabels[
+                                                                            score
+                                                                        ]
+                                                                    }
                                                                 >
                                                                     <input
                                                                         type="radio"
@@ -231,6 +254,7 @@ export default function VotingPage() {
                                                                             restaurant.userRating ===
                                                                             score
                                                                         }
+                                                                        aria-label={`${score} - ${ratingLabels[score]}`}
                                                                         onChange={() =>
                                                                             saveRating(
                                                                                 group.id,
@@ -239,7 +263,9 @@ export default function VotingPage() {
                                                                             )
                                                                         }
                                                                     />
-                                                                    {score}
+                                                                    <span>
+                                                                        {score}
+                                                                    </span>
                                                                 </label>
                                                             ),
                                                         )}
