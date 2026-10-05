@@ -5,33 +5,72 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
     type Group,
-    getCurrentUsername,
     getGroups,
     logout,
+    rateRestaurant,
 } from "@/lib/auth-actions";
 
 export default function VotingPage() {
     const [groups, setGroups] = useState<Group[]>([]);
-    const [user, setUser] = useState<string | null>(null);
     const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+    const [error, setError] = useState("");
+    const [savingRating, setSavingRating] = useState<string | null>(null);
 
     useEffect(() => {
         let isActive = true;
 
-        getCurrentUsername().then((username) => {
-            setUser(username);
-        });
-
-        getGroups().then((loadedGroups) => {
-            if (isActive) {
-                setGroups(loadedGroups);
-            }
-        });
+        getGroups()
+            .then((loadedGroups) => {
+                if (isActive) {
+                    setGroups(loadedGroups);
+                }
+            })
+            .catch(() => {
+                if (isActive) {
+                    setError("unable to load groups");
+                }
+            });
 
         return () => {
             isActive = false;
         };
     }, []);
+
+    async function saveRating(
+        groupId: string,
+        restaurantId: string,
+        score: number,
+    ) {
+        const key = `${groupId}:${restaurantId}`;
+        setSavingRating(key);
+        setError("");
+        try {
+            const result = await rateRestaurant(groupId, restaurantId, score);
+            if (result?.error) {
+                setError(result.error);
+                return;
+            }
+            setGroups((currentGroups) =>
+                currentGroups.map((group) =>
+                    group.id === groupId
+                        ? {
+                              ...group,
+                              restaurants: group.restaurants.map(
+                                  (restaurant) =>
+                                      restaurant.id === restaurantId
+                                          ? { ...restaurant, userRating: score }
+                                          : restaurant,
+                              ),
+                          }
+                        : group,
+                ),
+            );
+        } catch {
+            setError("unable to save your rating");
+        } finally {
+            setSavingRating(null);
+        }
+    }
 
     return (
         <main>
@@ -86,6 +125,11 @@ export default function VotingPage() {
                         ))}
                 </ul>
             </div>
+            {error && !openGroupId && (
+                <p className="mx-4 text-sm text-red-600" role="alert">
+                    {error}
+                </p>
+            )}
             {groups.map(
                 (group) =>
                     openGroupId === group.id && (
@@ -108,16 +152,107 @@ export default function VotingPage() {
                                         Close
                                     </Button>
                                 </div>
-                                <div>
-                                    <h3 className="text-lg font-semibold mb-2">
-                                        Group Members
-                                    </h3>
-
-                                    <ul className="text-gray-700 list-disc pl-5 space-y-1">
-                                        {group.members.map((member) => (
-                                            <li key={member}>{member}</li>
-                                        ))}
-                                    </ul>
+                                {error && (
+                                    <p
+                                        className="mb-3 text-sm text-red-600"
+                                        role="alert"
+                                    >
+                                        {error}
+                                    </p>
+                                )}
+                                <h3 className="mb-3 text-lg font-semibold">
+                                    Rate the selected restaurants
+                                </h3>
+                                <div className="max-h-[70vh] space-y-3 overflow-y-auto">
+                                    {group.restaurants.length > 0 ? (
+                                        group.restaurants.map((restaurant) => {
+                                            const ratingKey = `${group.id}:${restaurant.id}`;
+                                            return (
+                                                <article
+                                                    key={restaurant.id}
+                                                    className="flex flex-wrap items-center justify-between gap-4 rounded-lg border p-3"
+                                                >
+                                                    <div className="flex min-w-0 items-center gap-3">
+                                                        {restaurant.imageUrl && (
+                                                            <img
+                                                                src={
+                                                                    restaurant.imageUrl
+                                                                }
+                                                                alt=""
+                                                                className="h-16 w-16 rounded-lg object-cover"
+                                                            />
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <h4 className="font-medium">
+                                                                {
+                                                                    restaurant.name
+                                                                }
+                                                            </h4>
+                                                            <p className="text-sm text-gray-600">
+                                                                {restaurant.YelpRating >
+                                                                    0 &&
+                                                                    `⭐ ${restaurant.YelpRating}`}
+                                                                {restaurant.price &&
+                                                                    ` · ${restaurant.price}`}
+                                                            </p>
+                                                            {restaurant.address && (
+                                                                <p className="text-sm text-gray-500">
+                                                                    {
+                                                                        restaurant.address
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <fieldset
+                                                        disabled={
+                                                            savingRating ===
+                                                            ratingKey
+                                                        }
+                                                        className="flex items-center gap-2"
+                                                    >
+                                                        <legend className="sr-only">
+                                                            Rate{" "}
+                                                            {restaurant.name}
+                                                        </legend>
+                                                        {[1, 2, 3, 4, 5].map(
+                                                            (score) => (
+                                                                <label
+                                                                    key={score}
+                                                                    className="flex cursor-pointer items-center gap-1 text-sm"
+                                                                >
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`rating-${group.id}-${restaurant.id}`}
+                                                                        value={
+                                                                            score
+                                                                        }
+                                                                        checked={
+                                                                            restaurant.userRating ===
+                                                                            score
+                                                                        }
+                                                                        onChange={() =>
+                                                                            saveRating(
+                                                                                group.id,
+                                                                                restaurant.id,
+                                                                                score,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {score}
+                                                                </label>
+                                                            ),
+                                                        )}
+                                                    </fieldset>
+                                                </article>
+                                            );
+                                        })
+                                    ) : (
+                                        <p className="text-sm text-gray-600">
+                                            No restaurants have been selected
+                                            for this group.
+                                        </p>
+                                    )}
                                 </div>
                             </section>
                         </div>
