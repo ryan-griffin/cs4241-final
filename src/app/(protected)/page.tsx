@@ -345,17 +345,20 @@ export default function Home() {
                                     </h2>
 
                                     <div className="flex items-center gap-2">
-                                        {user !== group.ownerId && (
-                                            <Button
-                                                variant="destructive"
-                                                size="sm"
-                                                onClick={() =>
-                                                    deleteMember(user || "")
-                                                }
-                                            >
-                                                Leave Group
-                                            </Button>
-                                        )}
+                                        {user &&
+                                            user !== group.ownerId &&
+                                            group.status !== "VOTING" &&
+                                            group.status !== "COMPLETE" && (
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        deleteMember(user || "")
+                                                    }
+                                                >
+                                                    Leave Group
+                                                </Button>
+                                            )}
 
                                         {user === group.ownerId &&
                                             group.status === "DRAFT" && (
@@ -374,37 +377,104 @@ export default function Home() {
                                                     Select Restaurants
                                                 </Button>
                                             )}
-                                        {user === group.ownerId && (
+                                        {group.status === "VOTING" && (
                                             <>
-                                                {group.status === "VOTING" ? (
-                                                    <>
+                                                <Button
+                                                    disabled={
+                                                        calculatingResultsGroupId ===
+                                                        group.id
+                                                    }
+                                                    onClick={() =>
+                                                        calculateGroupResults(
+                                                            group.id,
+                                                        )
+                                                    }
+                                                >
+                                                    {calculatingResultsGroupId ===
+                                                    group.id
+                                                        ? "Calculating..."
+                                                        : "Calculate Results"}
+                                                </Button>
+                                                {user === group.ownerId && (
+                                                    <Button
+                                                        onClick={() =>
+                                                            moveGroupToComplete(
+                                                                group.id,
+                                                            )
+                                                        }
+                                                    >
+                                                        Move to Complete
+                                                    </Button>
+                                                )}
+                                                {user &&
+                                                    user !== group.ownerId && (
                                                         <Button
-                                                            disabled={
-                                                                calculatingResultsGroupId ===
-                                                                group.id
-                                                            }
+                                                            variant="destructive"
+                                                            size="sm"
                                                             onClick={() =>
-                                                                calculateGroupResults(
-                                                                    group.id,
+                                                                deleteMember(
+                                                                    user,
                                                                 )
                                                             }
                                                         >
-                                                            {calculatingResultsGroupId ===
-                                                            group.id
-                                                                ? "Calculating..."
-                                                                : "Calculate Results"}
+                                                            Leave Group
                                                         </Button>
-                                                        <Button
-                                                            onClick={() =>
-                                                                moveGroupToComplete(
-                                                                    group.id,
-                                                                )
-                                                            }
-                                                        >
-                                                            Complete Voting
-                                                        </Button>
-                                                    </>
+                                                    )}
+                                            </>
+                                        )}
+                                        {group.status === "COMPLETE" && (
+                                            <>
+                                                <Button
+                                                    disabled={
+                                                        calculatingResultsGroupId ===
+                                                        group.id
+                                                    }
+                                                    onClick={() =>
+                                                        calculateGroupResults(
+                                                            group.id,
+                                                        )
+                                                    }
+                                                >
+                                                    {calculatingResultsGroupId ===
+                                                    group.id
+                                                        ? "Calculating..."
+                                                        : "Calculate Results"}
+                                                </Button>
+                                                {user === group.ownerId ? (
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            deleteGroup(
+                                                                group.id,
+                                                            );
+                                                            setOpenGroupId(
+                                                                null,
+                                                            );
+                                                        }}
+                                                    >
+                                                        Delete Group
+                                                    </Button>
                                                 ) : (
+                                                    user && (
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                deleteMember(
+                                                                    user,
+                                                                )
+                                                            }
+                                                        >
+                                                            Leave Group
+                                                        </Button>
+                                                    )
+                                                )}
+                                            </>
+                                        )}
+                                        {group.status === "DRAFT" &&
+                                            user === group.ownerId && (
+                                                <>
                                                     <Button
                                                         onClick={() =>
                                                             moveGroupToVoting(
@@ -412,21 +482,21 @@ export default function Home() {
                                                             )
                                                         }
                                                     >
-                                                        Start Voting
+                                                        Move to Voting
                                                     </Button>
-                                                )}
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        deleteGroup(group.id);
-                                                        setOpenGroupId(null);
-                                                    }}
-                                                >
-                                                    Delete Group
-                                                </Button>
-                                            </>
-                                        )}
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            deleteGroup(
+                                                                group.id,
+                                                            );
+                                                        }}
+                                                    >
+                                                        Delete Group
+                                                    </Button>
+                                                </>
+                                            )}
                                         <Button
                                             variant="secondary"
                                             onClick={() => setOpenGroupId(null)}
