@@ -12,14 +12,13 @@
 
 3. Technologies: Typescript for the code, Nextjs for backend and data, Shadcn for some components, Tailwindcss for any styling, Prisma for database
 
-4. Challenges: getting 
+4. Challenges: a technical challenge was figuring out the map and API at first, design in general and figuring out both ux/ui was a bit challenging. 
 
 5. Contribution
-    - Sylvia: created the home page stuff, the group cards and the map. got groups to work with backend, and made the thing to remove members, leave groups, and delete groups. created the map on the right side. made the move to complete and move to voting buttons and the calculate results. also made the voting system and did a few small ui cleanup things/fixes.
+    - Sylvia: created the original home page stuff, the group cards and the map. got groups to work with backend, and made the thing to remove members, leave groups, and delete groups. created the map on the right side. made the move to complete and move to voting buttons and the calculate results. also made the voting system and did a few small ui cleanup things/fixes.
     - Samura:
     - Ryan:
 
 6. Project video: 
 
 
-Think of 1,3, and 4 in particular in a similar vein to the design / tech achievements for A1—A4… make a case for why what you did was challenging and why your implementation deserves a grade of 100%.
