@@ -1,7 +1,16 @@
 "use client";
 
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+    RestaurantDetails,
+    toRestaurantSummary,
+} from "@/components/restaurant-row";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
 export type Restaurant = {
     id: string;
@@ -18,15 +27,12 @@ export type Restaurant = {
     location: { display_address: string[] };
 };
 
-type Coordinates = {
-    latitude: number;
-    longitude: number;
-};
+type Coordinates = Restaurant["coordinates"];
 
 const RestaurantLeafletMap = dynamic(() => import("./restaurantLeafletMap"), {
     ssr: false,
     loading: () => (
-        <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-slate-500">
+        <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-muted-foreground">
             Loading map
         </div>
     ),
@@ -34,12 +40,18 @@ const RestaurantLeafletMap = dynamic(() => import("./restaurantLeafletMap"), {
 
 export function RestaurantMap({
     onRestaurantsLoaded,
+    restaurants: suppliedRestaurants,
+    fillHeight = false,
 }: {
-    onRestaurantsLoaded: (restaurants: Restaurant[]) => void;
+    onRestaurantsLoaded?: (restaurants: Restaurant[]) => void;
+    restaurants?: Restaurant[];
+    fillHeight?: boolean;
 }) {
     const [center, setCenter] = useState<Coordinates | null>(null);
-    const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
-    const [selected, setSelected] = useState<Restaurant | null>(null);
+    const [nearbyRestaurants, setNearbyRestaurants] = useState<Restaurant[]>(
+        [],
+    );
+    const [selectedId, setSelectedId] = useState<string | null>(null);
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const hasRequestedLocation = useRef(false);
@@ -48,7 +60,7 @@ export function RestaurantMap({
         async (coordinates: Coordinates) => {
             setLoading(true);
             setError("");
-            setSelected(null);
+            setSelectedId(null);
             try {
                 const params = new URLSearchParams({
                     latitude: String(coordinates.latitude),
@@ -68,11 +80,12 @@ export function RestaurantMap({
                             "Could not load restaurants.",
                     );
                 }
-                const nearbyRestaurants = data.businesses ?? [];
-                setRestaurants(nearbyRestaurants);
-                onRestaurantsLoaded(nearbyRestaurants);
+                const loadedRestaurants = data.businesses ?? [];
+                setNearbyRestaurants(loadedRestaurants);
+                onRestaurantsLoaded?.(loadedRestaurants);
             } catch (cause) {
-                setRestaurants([]);
+                setNearbyRestaurants([]);
+                onRestaurantsLoaded?.([]);
                 setError(
                     cause instanceof Error
                         ? cause.message
@@ -86,7 +99,7 @@ export function RestaurantMap({
     );
 
     useEffect(() => {
-        if (hasRequestedLocation.current) {
+        if (suppliedRestaurants !== undefined || hasRequestedLocation.current) {
             return;
         }
         hasRequestedLocation.current = true;
@@ -106,72 +119,70 @@ export function RestaurantMap({
             },
             () => setError("allow location access to find nearby restaurants."),
         );
-    }, [search]);
+    }, [search, suppliedRestaurants]);
+
+    const restaurants = suppliedRestaurants ?? nearbyRestaurants;
+    const mapCenter =
+        suppliedRestaurants !== undefined
+            ? suppliedRestaurants[0]?.coordinates
+            : center;
+    const selectedRestaurant = restaurants.find(
+        (restaurant) => restaurant.id === selectedId,
+    );
 
     return (
-        <section className="flex h-full min-h-[420px] flex-col gap-3">
+        <section
+            className={`flex h-full min-h-[420px] flex-col gap-3 ${fillHeight ? "lg:min-h-0 lg:flex-1" : ""}`}
+        >
             {error && (
-                <p role="alert" className="text-sm text-red-600">
-                    {error}
-                </p>
+                <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                </Alert>
             )}
             {loading && (
-                <p className="text-sm text-slate-500">Searching Yelp</p>
+                <p className="text-sm text-muted-foreground">Searching Yelp</p>
             )}
-            <section className="relative min-h-[360px] flex-1 overflow-hidden rounded-xl bg-slate-100">
-                {center ? (
+            <section
+                className={`relative min-h-[360px] flex-1 overflow-hidden rounded-xl bg-muted ${fillHeight ? "lg:min-h-0" : ""}`}
+            >
+                {mapCenter ? (
                     <RestaurantLeafletMap
-                        center={center}
+                        center={mapCenter}
                         restaurants={restaurants}
-                        onSelect={setSelected}
+                        onSelect={(restaurant) => setSelectedId(restaurant.id)}
+                        fitRestaurants={suppliedRestaurants !== undefined}
                     />
                 ) : (
-                    <div className="flex h-full min-h-[360px] items-center justify-center p-8 text-center text-sm text-slate-500">
-                        location access needed to show nearby restaurants.
+                    <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
+                        {suppliedRestaurants !== undefined
+                            ? "No selected restaurants have map coordinates."
+                            : "Location access needed to show nearby restaurants."}
                     </div>
                 )}
-                {selected && (
-                    <article className="absolute bottom-4 left-4 z-[1000] max-w-xs rounded-xl bg-white p-4 shadow-xl">
-                        <button
-                            type="button"
-                            onClick={() => setSelected(null)}
-                            className="absolute right-3 top-2 text-lg text-slate-500"
-                        >
-                            x
-                        </button>
-                        <h2 className="pr-5 font-semibold">
-                            {selected.name}{" "}
-                            {selected.business_hours?.[0]?.is_open_now === false
-                                ? " (Closed)"
-                                : ""}
-                        </h2>
-                        <p className="mt-1 text-sm text-slate-600">
-                            {selected.rating
-                                ? `${selected.rating} stars · ${selected.review_count} reviews`
-                                : ""}
-                            {selected.price ? ` · ${selected.price}` : ""}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                            {[
-                                ...new Set(
-                                    selected.categories?.map(
-                                        (category) => category.title,
-                                    ),
-                                ),
-                            ].join(", ")}
-                        </p>
-                        <p className="mt-1 text-sm text-slate-600">
-                            {selected.location.display_address.join(", ")}
-                        </p>
-                        <a
-                            href={selected.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-2 inline-block text-sm text-blue-600 underline"
-                        >
-                            View on Yelp
-                        </a>
-                    </article>
+                {selectedRestaurant && (
+                    <Card className="absolute bottom-4 left-4 z-[1000] max-w-xs">
+                        <CardContent className="pr-12">
+                            <RestaurantDetails
+                                restaurant={toRestaurantSummary(
+                                    selectedRestaurant,
+                                )}
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={() => setSelectedId(null)}
+                                className="absolute right-3 top-3"
+                                aria-label="Close restaurant details"
+                            >
+                                <HugeiconsIcon
+                                    icon={Cancel01Icon}
+                                    strokeWidth={2}
+                                    aria-hidden="true"
+                                />
+                            </Button>
+                        </CardContent>
+                    </Card>
                 )}
             </section>
         </section>

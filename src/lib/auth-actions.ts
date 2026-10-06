@@ -1,22 +1,23 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { GroupStatus, Restaurant } from "@/generated/prisma/client";
 import { createSession, deleteSession, getCurrentUser } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export type AuthResult = { error: string } | undefined;
 
-export type Result = {
+type RestaurantDetails = Pick<
+    Restaurant,
+    "name" | "imageUrl" | "address" | "price" | "YelpRating" | "yelpURL"
+>;
+
+export type Result = RestaurantDetails & {
     place: number;
     restaurantId: string;
-    name: string;
     points: number;
-    imageUrl: string | null;
-    address: string | null;
-    price: string | null;
-    YelpRating: number;
-    yelpURL: string | null;
 };
 
 export type CalculateResultsResult = { error: string } | { results: Result[] };
@@ -24,45 +25,114 @@ export type CalculateResultsResult = { error: string } | { results: Result[] };
 export type Group = {
     id: string;
     name: string;
-    status: string;
-    createdAt: Date;
+    status: GroupStatus;
     ownerId: string;
     members: string[];
-    restaurants: {
-        id: string;
-        yelpID: string;
-        name: string;
-        imageUrl: string | null;
-        address: string | null;
-        price: string | null;
-        YelpRating: number;
-        yelpURL: string | null;
-        userRating: number | null;
-    }[];
+    restaurants: (RestaurantDetails &
+        Pick<Restaurant, "id" | "yelpID" | "latitude" | "longitude"> & {
+            userRating: number | null;
+        })[];
 };
 
-export async function getGroups(): Promise<Group[]> {
+export type GroupSummary = Pick<Group, "id" | "name" | "status" | "members">;
+
+const groupSummarySelect = {
+    id: true,
+    name: true,
+    status: true,
+    members: { select: { userId: true } },
+} as const;
+
+const restaurantDetailsSelect = {
+    name: true,
+    imageUrl: true,
+    address: true,
+    price: true,
+    YelpRating: true,
+    yelpURL: true,
+} as const;
+
+export type RestaurantInput = {
+    yelpID: string;
+    name: string;
+    imageUrl?: string | null;
+    address?: string | null;
+    city?: string | null;
+    state?: string | null;
+    ZipCode?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    price?: string | null;
+    YelpRating: number;
+    yelpURL?: string | null;
+};
+
+function restaurantLink(restaurant: RestaurantInput) {
+    return {
+        restaurant: {
+            connectOrCreate: {
+                where: { yelpID: restaurant.yelpID },
+                create: {
+                    yelpID: restaurant.yelpID,
+                    name: restaurant.name,
+                    imageUrl: restaurant.imageUrl,
+                    address: restaurant.address,
+                    city: restaurant.city,
+                    state: restaurant.state,
+                    ZipCode: restaurant.ZipCode,
+                    latitude: restaurant.latitude,
+                    longitude: restaurant.longitude,
+                    price: restaurant.price,
+                    YelpRating: restaurant.YelpRating,
+                    yelpURL: restaurant.yelpURL,
+                },
+            },
+        },
+    };
+}
+
+function revalidateGroup(groupId: string) {
+    revalidatePath("/");
+    revalidatePath(`/groups/${groupId}`);
+}
+
+export async function getGroups(): Promise<GroupSummary[]> {
     const currentUser = await getCurrentUser();
-    if (!currentUser) {
-        throw new Error("no user, log in");
-    }
+    if (!currentUser) throw new Error("no user, log in");
 
     const groups = await db.group.findMany({
         where: { members: { some: { userId: currentUser.username } } },
-        include: {
-            members: { select: { userId: true } },
+        select: groupSummarySelect,
+        orderBy: { createdAt: "desc" },
+    });
+
+    return groups.map((group) => ({
+        ...group,
+        members: group.members.map((member) => member.userId),
+    }));
+}
+
+export async function getGroup(groupId: string): Promise<Group | null> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) throw new Error("no user, log in");
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            members: { some: { userId: currentUser.username } },
+        },
+        select: {
+            ...groupSummarySelect,
+            ownerId: true,
             restaurants: {
                 include: {
                     restaurant: {
                         select: {
+                            ...restaurantDetailsSelect,
                             id: true,
                             yelpID: true,
-                            name: true,
-                            imageUrl: true,
-                            address: true,
-                            price: true,
-                            YelpRating: true,
-                            yelpURL: true,
+                            latitude: true,
+                            longitude: true,
                         },
                     },
                     ratings: {
@@ -72,24 +142,22 @@ export async function getGroups(): Promise<Group[]> {
                 },
             },
         },
-        orderBy: { createdAt: "desc" },
     });
+    if (!group) return null;
 
-    return groups.map((group) => ({
-        id: group.id,
-        name: group.name,
-        status: group.status,
-        createdAt: group.createdAt,
-        ownerId: group.ownerId,
+    return {
+        ...group,
         members: group.members.map((member) => member.userId),
         restaurants: group.restaurants.map(({ restaurant, ratings }) => ({
             ...restaurant,
             userRating: ratings[0]?.score ?? null,
         })),
-    }));
+    };
 }
 
-export async function createGroup(name: string): Promise<AuthResult> {
+export async function createGroup(
+    name: string,
+): Promise<{ error: string } | { id: string }> {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
         return { error: "no user, log in" };
@@ -97,7 +165,7 @@ export async function createGroup(name: string): Promise<AuthResult> {
 
     const normalizedName = name.trim();
     if (!normalizedName || normalizedName.length > 60) {
-        return { error: "group name must be under 60 characters" };
+        return { error: "group name must be between 1 and 60 characters" };
     }
 
     const existing = await db.group.findUnique({
@@ -113,13 +181,61 @@ export async function createGroup(name: string): Promise<AuthResult> {
         return { error: "you already have a group with that name" };
     }
 
-    await db.group.create({
+    const created = await db.group.create({
         data: {
             name: normalizedName,
             ownerId: currentUser.username,
             members: { create: { userId: currentUser.username } },
         },
+        select: { id: true },
     });
+    revalidatePath("/");
+    return { id: created.id };
+}
+
+export async function renameGroup(
+    groupId: string,
+    name: string,
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+
+    const normalizedName = name.trim();
+    if (!normalizedName || normalizedName.length > 60) {
+        return { error: "group name must be between 1 and 60 characters" };
+    }
+
+    const group = await db.group.findFirst({
+        where: {
+            id: groupId,
+            ownerId: currentUser.username,
+        },
+        select: { id: true },
+    });
+    if (!group) {
+        return { error: "only the group owner can rename the group." };
+    }
+
+    const existing = await db.group.findUnique({
+        where: {
+            ownerId_name: {
+                ownerId: currentUser.username,
+                name: normalizedName,
+            },
+        },
+        select: { id: true },
+    });
+    if (existing && existing.id !== group.id) {
+        return { error: "you already have a group with that name" };
+    }
+
+    await db.group.update({
+        where: { id: group.id },
+        data: { name: normalizedName },
+    });
+    revalidateGroup(groupId);
 }
 
 export async function addMember(
@@ -168,6 +284,7 @@ export async function addMember(
     await db.groupMembership.create({
         data: { groupId: group.id, userId: user.username },
     });
+    revalidateGroup(groupId);
 }
 
 export async function removeMember(
@@ -219,6 +336,7 @@ export async function removeMember(
             groupId_userId: { groupId: group.id, userId: normalizedUsername },
         },
     });
+    revalidateGroup(groupId);
 }
 
 export async function deleteGroup(groupId: string): Promise<AuthResult> {
@@ -239,158 +357,103 @@ export async function deleteGroup(groupId: string): Promise<AuthResult> {
     }
 
     await db.group.delete({ where: { id: group.id } });
+    revalidateGroup(groupId);
 }
 
-/* 
-Check user is log in 
-check user own group
-check if group still in draft 
-prevents restaurant from bring added 2 times
-create restaurant if it doesn't already exist
-*/
-
-export async function addRestaurantTOGroup(
+export async function searchUsers(
+    query: string,
     groupId: string,
-    restaurant: {
-        yelpID: string;
-        name: string;
-        imageUrl?: string | null;
-        address?: string | null;
-        city?: string | null;
-        state?: string | null;
-        ZipCode?: string | null;
-        latitude?: number | null;
-        longitude?: number | null;
-        price?: string | null;
-        YelpRating: number;
-        yelpURL?: string | null;
-    },
-): Promise<AuthResult> {
+): Promise<string[]> {
     const currentUser = await getCurrentUser();
-
     if (!currentUser) {
-        return { error: "no user, log in" };
+        return [];
     }
 
     const group = await db.group.findFirst({
+        where: { id: groupId, ownerId: currentUser.username },
+        select: { members: { select: { userId: true } } },
+    });
+    if (!group) return [];
+
+    const users = await db.user.findMany({
         where: {
-            id: groupId,
-            ownerId: currentUser.username,
-            status: "DRAFT",
+            username: {
+                contains: query.trim().toLowerCase(),
+                notIn: group.members.map((member) => member.userId),
+            },
         },
+        select: { username: true },
+        orderBy: { username: "asc" },
+        take: 15,
+    });
+    return users.map((user) => user.username);
+}
+
+export async function setGroupRestaurants(
+    groupId: string,
+    selectedYelpIds: string[],
+    newRestaurants: RestaurantInput[],
+): Promise<AuthResult> {
+    const currentUser = await getCurrentUser();
+    if (!currentUser) {
+        return { error: "no user, log in" };
+    }
+    const group = await db.group.findFirst({
+        where: { id: groupId, ownerId: currentUser.username, status: "DRAFT" },
         select: {
-            id: true,
+            restaurants: {
+                select: {
+                    restaurantId: true,
+                    restaurant: { select: { yelpID: true } },
+                },
+            },
         },
     });
-
     if (!group) {
         return {
-            error: "Only owner can select restaurant before voring starts",
+            error: "only the owner can select restaurants before voting starts",
         };
     }
-    const existingRestairant = await db.restaurant.findUnique({
-        where: {
-            yelpID: restaurant.yelpID,
-        },
-        select: {
-            id: true,
-        },
-    });
-
-    let restaurantId = existingRestairant?.id;
-
-    if (!restaurantId) {
-        const newRestaurant = await db.restaurant.create({
-            data: {
-                yelpID: restaurant.yelpID,
-                name: restaurant.name,
-                imageUrl: restaurant.imageUrl ?? null,
-                address: restaurant.address ?? null,
-                city: restaurant.city ?? null,
-                state: restaurant.state ?? null,
-                ZipCode: restaurant.ZipCode ?? null,
-                latitude: restaurant.latitude ?? null,
-                longitude: restaurant.longitude ?? null,
-                price: restaurant.price ?? null,
-                YelpRating: restaurant.YelpRating,
-                yelpURL: restaurant.yelpURL ?? null,
-            },
-            select: {
-                id: true,
-            },
-        });
-        restaurantId = newRestaurant.id;
+    const selectedIds = new Set(selectedYelpIds);
+    const currentIds = new Set(
+        group.restaurants.map(({ restaurant }) => restaurant.yelpID),
+    );
+    const suppliedRestaurants = new Map(
+        newRestaurants.map((restaurant) => [restaurant.yelpID, restaurant]),
+    );
+    const additions: RestaurantInput[] = [];
+    for (const id of selectedIds) {
+        if (!currentIds.has(id)) {
+            const restaurant = suppliedRestaurants.get(id);
+            if (!restaurant) {
+                return {
+                    error: "a selected restaurant is no longer available",
+                };
+            }
+            additions.push(restaurant);
+        }
     }
-    const alreadySeleceted = await db.groupRestaurant.findUnique({
-        where: {
-            groupId_restaurantId: {
-                groupId: group.id,
-                restaurantId,
-            },
-        },
-        select: {
-            groupId: true,
-        },
-    });
-
-    if (alreadySeleceted) {
-        return { error: "restaurant is already selected." };
-    }
-    await db.groupRestaurant.create({
+    await db.group.update({
+        where: { id: groupId, ownerId: currentUser.username, status: "DRAFT" },
         data: {
-            groupId: group.id,
-            restaurantId,
-        },
-    });
-}
-export async function removeRestaurantFromGroup(
-    groupId: string,
-    restaurantId: string,
-): Promise<AuthResult> {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-        return { error: "no user, log in" };
-    }
-
-    const group = await db.group.findFirst({
-        where: {
-            id: groupId,
-            ownerId: currentUser.username,
-        },
-        select: { id: true },
-    });
-
-    if (!group) {
-        return { error: "only the group owner can remove restaurants." };
-    }
-
-    const groupRestaurant = await db.groupRestaurant.findUnique({
-        where: {
-            groupId_restaurantId: {
-                groupId: group.id,
-                restaurantId,
+            restaurants: {
+                deleteMany: {
+                    restaurantId: {
+                        in: group.restaurants
+                            .filter(
+                                ({ restaurant }) =>
+                                    !selectedIds.has(restaurant.yelpID),
+                            )
+                            .map(({ restaurantId }) => restaurantId),
+                    },
+                },
+                create: additions.map(restaurantLink),
             },
         },
     });
-
-    if (!groupRestaurant) {
-        return { error: "restaurant is not in the group." };
-    }
-
-    await db.groupRestaurant.delete({
-        where: {
-            groupId_restaurantId: {
-                groupId: group.id,
-                restaurantId,
-            },
-        },
-    });
+    revalidateGroup(groupId);
 }
 
-export async function getCurrentUsername(): Promise<string | null> {
-    const currentUser = await getCurrentUser();
-    return currentUser?.username ?? null;
-}
 export async function signup(
     _prev: AuthResult,
     formData: FormData,
@@ -454,50 +517,46 @@ export async function logout(): Promise<void> {
     redirect("/login");
 }
 
-export async function groupToVoting(groupId: string): Promise<AuthResult> {
+async function transitionGroup(
+    groupId: string,
+    status: "DRAFT" | "VOTING",
+): Promise<AuthResult> {
     const currentUser = await getCurrentUser();
     if (!currentUser) {
         return { error: "no user, log in" };
     }
+    const where = { id: groupId, ownerId: currentUser.username, status };
     const group = await db.group.findFirst({
-        where: {
-            id: groupId,
-            ownerId: currentUser.username,
-        },
+        where,
         select: { id: true },
     });
 
     if (!group) {
-        return { error: "only the group owner can start voting." };
+        return {
+            error:
+                status === "DRAFT"
+                    ? "only the group owner can start voting for a draft group."
+                    : "only the group owner can close a group that is voting.",
+        };
     }
 
     await db.group.update({
-        where: { id: group.id },
-        data: { status: "VOTING" },
+        where,
+        data: { status: status === "DRAFT" ? "VOTING" : "COMPLETE" },
     });
+    revalidateGroup(groupId);
 }
 
-export async function groupToComplete(groupId: string): Promise<AuthResult> {
-    const currentUser = await getCurrentUser();
-    if (!currentUser) {
-        return { error: "no user, log in" };
-    }
-    const group = await db.group.findFirst({
-        where: {
-            id: groupId,
-            ownerId: currentUser.username,
-        },
-        select: { id: true },
-    });
+export async function groupToVoting(groupId: string): Promise<AuthResult> {
+    return transitionGroup(groupId, "DRAFT");
+}
 
-    if (!group) {
-        return { error: "only the group owner can close voting." };
-    }
-
-    await db.group.update({
-        where: { id: group.id },
-        data: { status: "COMPLETE" },
-    });
+export async function completeVoting(
+    groupId: string,
+): Promise<CalculateResultsResult> {
+    const result = await transitionGroup(groupId, "VOTING");
+    if (result?.error) return result;
+    return calculateResults(groupId);
 }
 
 export async function rateRestaurant(
@@ -554,6 +613,7 @@ export async function rateRestaurant(
         },
         update: { score },
     });
+    revalidateGroup(groupId);
 }
 
 export async function calculateResults(
@@ -566,13 +626,21 @@ export async function calculateResults(
     const group = await db.group.findFirst({
         where: {
             id: groupId,
-            ownerId: currentUser.username,
+            OR: [
+                { ownerId: currentUser.username },
+                {
+                    status: "COMPLETE",
+                    members: { some: { userId: currentUser.username } },
+                },
+            ],
         },
         select: { id: true, status: true },
     });
 
     if (!group) {
-        return { error: "only the group owner can compile results." };
+        return {
+            error: "you must be the owner or a member of a completed group to view results.",
+        };
     }
     if (group.status !== "VOTING" && group.status !== "COMPLETE") {
         return {
@@ -585,13 +653,8 @@ export async function calculateResults(
         include: {
             restaurant: {
                 select: {
+                    ...restaurantDetailsSelect,
                     id: true,
-                    name: true,
-                    imageUrl: true,
-                    address: true,
-                    price: true,
-                    YelpRating: true,
-                    yelpURL: true,
                 },
             },
             ratings: { select: { score: true } },
@@ -611,14 +674,9 @@ export async function calculateResults(
                 ratings.length > 0 &&
                 !ratings.some((rating) => rating.score === 1),
         )
-        .map(({ restaurant, ratings }) => ({
-            restaurantId: restaurant.id,
-            name: restaurant.name,
-            imageUrl: restaurant.imageUrl,
-            address: restaurant.address,
-            price: restaurant.price,
-            YelpRating: restaurant.YelpRating,
-            yelpURL: restaurant.yelpURL,
+        .map(({ restaurant: { id, ...details }, ratings }) => ({
+            ...details,
+            restaurantId: id,
             points: ratings.reduce((total, rating) => {
                 const points = pointsByScore[rating.score];
                 if (points === undefined) {
