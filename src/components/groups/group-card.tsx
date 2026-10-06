@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GroupStatusBadge } from "@/components/groups/group-status-badge";
 import { Badge } from "@/components/ui/badge";
 import {
     Card,
@@ -23,15 +24,7 @@ export function GroupCard({ group }: Props) {
                 <CardHeader>
                     <div className="flex items-center justify-between gap-2">
                         <CardTitle>{group.name}</CardTitle>
-                        <Badge
-                            variant={
-                                group.status === "VOTING"
-                                    ? "default"
-                                    : "secondary"
-                            }
-                        >
-                            {group.status}
-                        </Badge>
+                        <GroupStatusBadge status={group.status} />
                     </div>
                     <CardDescription>
                         {group.members.length} members

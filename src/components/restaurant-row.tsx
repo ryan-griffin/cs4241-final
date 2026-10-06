@@ -115,8 +115,8 @@ export function RestaurantDetails({
                             <span
                                 className={
                                     restaurant.isOpenNow
-                                        ? "text-green-700"
-                                        : "text-red-700"
+                                        ? "text-primary"
+                                        : "text-destructive"
                                 }
                             >
                                 {restaurant.isOpenNow
@@ -148,7 +148,7 @@ export function RestaurantRow({
     return (
         <div className="@container">
             <Card
-                className={`grid grid-cols-1 items-center gap-3 p-3 ${children ? "@min-[420px]:grid-cols-[minmax(0,1fr)_auto]" : ""}`}
+                className={`grid grid-cols-1 items-center gap-3 p-3 ring-inset ${children ? "@min-[420px]:grid-cols-[minmax(0,1fr)_auto]" : ""}`}
             >
                 <RestaurantDetails restaurant={restaurant} rank={rank} />
                 {children && <div className="justify-self-end">{children}</div>}

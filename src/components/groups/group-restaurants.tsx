@@ -95,7 +95,7 @@ export function GroupRestaurants({
                 </Alert>
             )}
             {available.size > 0 ? (
-                <div className="min-h-0 flex-1 space-y-2 p-1 lg:overflow-y-auto lg:overscroll-contain">
+                <div className="min-h-0 flex-1 space-y-2 lg:overflow-y-auto lg:overscroll-contain">
                     {[...available].map(([id, restaurant]) => (
                         <RestaurantRow key={id} restaurant={restaurant}>
                             {editing && (

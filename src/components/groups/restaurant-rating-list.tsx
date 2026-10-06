@@ -20,14 +20,14 @@ export function RestaurantRatingList({ groupId, restaurants, onRate }: Props) {
     return (
         <section className="flex min-h-0 flex-1 flex-col">
             <GroupCardHeader>Selected restaurants</GroupCardHeader>
-            <div className="mb-4 flex shrink-0 flex-wrap gap-x-3 gap-y-1 text-xs text-gray-600">
+            <div className="mb-4 flex shrink-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
                 {[1, 2, 3, 4, 5].map((score) => (
                     <span key={score} className="whitespace-nowrap">
                         {score} = {ratingLabels[score]}
                     </span>
                 ))}
             </div>
-            <div className="min-h-0 flex-1 space-y-3 p-1 lg:overflow-y-auto lg:overscroll-contain">
+            <div className="min-h-0 flex-1 space-y-3 lg:overflow-y-auto lg:overscroll-contain">
                 {restaurants.length > 0 ? (
                     restaurants.map((restaurant) => (
                         <RestaurantRow
@@ -63,7 +63,7 @@ export function RestaurantRatingList({ groupId, restaurants, onRate }: Props) {
                         </RestaurantRow>
                     ))
                 ) : (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-muted-foreground">
                         No restaurants have been selected for this group.
                     </p>
                 )}

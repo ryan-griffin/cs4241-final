@@ -84,9 +84,9 @@ export default function RestaurantLeafletMap({
                     ]}
                     radius={12}
                     pathOptions={{
-                        color: "#ffffff",
+                        color: "var(--primary-foreground)",
                         weight: 2,
-                        fillColor: "#FF1A1A",
+                        fillColor: "var(--primary)",
                         fillOpacity: 1,
                     }}
                     eventHandlers={{

@@ -6,9 +6,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 import { GroupCardHeader } from "@/components/groups/group-card-header";
+import { GroupStatusBadge } from "@/components/groups/group-status-badge";
 import { type Restaurant, RestaurantMap } from "@/components/restaurantMap";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -249,7 +249,7 @@ export function GroupWorkspace({
                             <h1 className="text-3xl font-semibold wrap-break-word">
                                 {group.name}
                             </h1>
-                            <Badge variant="secondary">{group.status}</Badge>
+                            <GroupStatusBadge status={group.status} />
                         </div>
                         <p className="text-sm text-muted-foreground">
                             {group.members.length} members · Owned by{" "}
@@ -380,7 +380,7 @@ export function GroupWorkspace({
                             <CardContent className="flex min-h-0 flex-1 flex-col">
                                 <GroupCardHeader>
                                     {isDraft
-                                        ? "Restaurants"
+                                        ? "Nearby restaurants"
                                         : "Selected restaurants"}
                                 </GroupCardHeader>
                                 <RestaurantMap

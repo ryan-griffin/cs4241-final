@@ -32,7 +32,7 @@ type Coordinates = Restaurant["coordinates"];
 const RestaurantLeafletMap = dynamic(() => import("./restaurantLeafletMap"), {
     ssr: false,
     loading: () => (
-        <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-slate-500">
+        <div className="flex h-full min-h-[360px] items-center justify-center text-sm text-muted-foreground">
             Loading map
         </div>
     ),
@@ -143,7 +143,7 @@ export function RestaurantMap({
                 <p className="text-sm text-muted-foreground">Searching Yelp</p>
             )}
             <section
-                className={`relative min-h-[360px] flex-1 overflow-hidden rounded-xl bg-slate-100 ${fillHeight ? "lg:min-h-0" : ""}`}
+                className={`relative min-h-[360px] flex-1 overflow-hidden rounded-xl bg-muted ${fillHeight ? "lg:min-h-0" : ""}`}
             >
                 {mapCenter ? (
                     <RestaurantLeafletMap

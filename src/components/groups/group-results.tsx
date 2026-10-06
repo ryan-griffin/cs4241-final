@@ -15,7 +15,7 @@ export function GroupResults({ results }: { results: Result[] }) {
                         Top restaurants
                     </GroupCardHeader>
                     {results.length > 0 ? (
-                        <ol className="min-h-0 flex-1 space-y-2 p-1 lg:overflow-y-auto lg:overscroll-contain">
+                        <ol className="min-h-0 flex-1 space-y-2 lg:overflow-y-auto lg:overscroll-contain">
                             {results.map((restaurant) => (
                                 <li key={restaurant.restaurantId}>
                                     <RestaurantRow
