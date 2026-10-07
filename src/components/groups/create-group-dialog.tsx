@@ -71,7 +71,7 @@ export function CreateGroupDialog({
                             className="flex h-full min-h-35 w-full items-center justify-center rounded-2xl bg-card text-muted-foreground ring-1 ring-foreground/10 transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2"
                         />
                     ) : (
-                        <Button />
+                        <Button className="rounded-full border-[#AEB8A5] bg-transparent text-[#52604E] hover:bg-[#EEF1E9]" />
                     )
                 }
             >
