@@ -15,7 +15,7 @@
 4. Challenges: a technical challenge was figuring out the map and API at first, design in general and figuring out both ux/ui was a bit challenging. 
 
 5. Contribution
-    - Sylvia: created the original home page stuff, the group cards and the map. got groups to work with backend, and made the thing to remove members, leave groups, and delete groups. created the map on the right side. made the move to complete and move to voting buttons and the calculate results. also made the voting system and did a few small ui cleanup things/fixes.
+    - Sylvia: created the original home page stuff, the group cards and the map. got groups to work with backend, and made the thing to remove members, leave groups, and delete groups. created the map on the right side using Yelp API and leaflet. made the move to complete and move to voting backend stuff, and the calculate results. also made the voting system and did a few small ui cleanup things/fixes.
     - Samura: Implemented the nearby restaurant map and integrated restaurant search using the Yelp API. Developed the restaurant selection interface, including displaying restaurant details such as star rating, number of reviews, price range, and a link to view the restaurant on Yelp. Did user interface and dashbord. 
     - Ryan:
 
