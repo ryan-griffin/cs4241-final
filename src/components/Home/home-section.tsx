@@ -31,22 +31,27 @@ export function HomeSection({ username }: HomeSectionProps) {
                         Create a group, find restaurants nearby, and let
                         everyone have a say. Decide where to eat together.
                     </p>
-
                     <div className="mt-10">
                         <Link
-                            href="#dashboard"
+                            href={username ? "#dashboard" : "/login"}
                             className="inline-flex h-12 items-center justify-center rounded-full bg-[#26352A] px-8 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-[#3B4B3D]"
                         >
-                            Explore your groups
-                            <span className="ml-2">↓</span>
+                            {username ? "Explore your groups" : "Get Started"}
+                            <span className="ml-2">→</span>
                         </Link>
                     </div>
 
                     <p className="mt-6 text-sm text-[#697268]">
-                        Welcome,{" "}
-                        <span className="font-semibold text-[#52604E]">
-                            {username}!
-                        </span>
+                        {username ? (
+                            <>
+                                Welcome,{" "}
+                                <span className="font-semibold text-[#52604E]">
+                                    {username}!
+                                </span>
+                            </>
+                        ) : (
+                            <>Welcome!</>
+                        )}
                     </p>
                 </div>
 
@@ -60,13 +65,15 @@ export function HomeSection({ username }: HomeSectionProps) {
                     <div className="absolute inset-y-0 left-0 hidden w-1/3 bg-gradient-to-r from-[#DDE4D5] to-transparent lg:block" />
                 </div>
 
-                <Link
-                    href="#dashboard"
-                    className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 items-center gap-2 text-lg font-medium text-[#69765F] transition hover:text-[#26352A] lg:flex"
-                >
-                    <span>Scroll to explore</span>
-                    <span className="animate-bounce">↓</span>
-                </Link>
+                {username && (
+                    <Link
+                        href="#dashboard"
+                        className="absolute bottom-6 left-1/2 hidden -translate-x-1/2 items-center gap-2 text-lg font-medium text-[#69765F] transition hover:text-[#26352A] lg:flex"
+                    >
+                        <span>Scroll to explore</span>
+                        <span className="animate-bounce">↓</span>
+                    </Link>
+                )}
             </div>
         </section>
     );
