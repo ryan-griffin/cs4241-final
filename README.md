@@ -15,4 +15,4 @@ Link: https://where2eat-two.vercel.app/
 
 6. Project video:
 
-https://drive.google.com/file/d/1h84Xxa9sE9jywCLenKgQG_k3dlnphcBV/view?usp=sharing check this
+https://drive.google.com/file/d/1h84Xxa9sE9jywCLenKgQG_k3dlnphcBV/view?usp=sharing 
